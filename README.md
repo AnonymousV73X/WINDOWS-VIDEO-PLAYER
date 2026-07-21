@@ -1,2 +1,10 @@
-# WINDOWS-VIDEO-PLAYER
-🚧 NovaPlay — an offline-first Electron video player with a libVLC engine under a fully custom, NovaTune-style glowing dark UI. Plays any format, zero network calls.  Visibility
+# NovaPlay
+
+Offline video player for Windows. libVLC engine underneath, fully custom UI on top —
+no VLC window, no VLC look, ever.
+
+- Plays any format/codec libVLC supports
+- Zero network calls, fully local library + cache
+- Dark, glowing, NovaTune-style interface (shared design language with [NovaTune](#))
+
+Status: early build.
