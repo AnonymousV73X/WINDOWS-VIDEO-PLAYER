@@ -218,6 +218,21 @@ function createMainWindow() {
   // Register IPC handlers — they need mainWindow for send-backs.
   registerIPCHandlers(mainWindow);
 
+  // ─── Initialise the video engine BEFORE the renderer loads ────────
+  // The native HWND is available the moment BrowserWindow is constructed,
+  // and the renderer queries engineIsAvailable() during DOMContentLoaded
+  // (which fires before did-finish-load). Initialising here guarantees
+  // global.videoEngine is set before any IPC query lands, so the
+  // renderer takes the libVLC path instead of falling back to HTML5.
+  try {
+    videoEngine = new VideoEngine();
+    videoEngine.attachToWindow(mainWindow);
+    global.videoEngine = videoEngine;
+  } catch (err) {
+    console.error('[video-engine] Failed to attach — running in fallback mode:', err.message);
+    global.videoEngine = null;
+  }
+
   // Load renderer.
   mainWindow.loadFile(path.join(__dirname, '..', 'ui', 'index.html'));
 
@@ -245,16 +260,6 @@ function createMainWindow() {
 
   mainWindow.webContents.once('did-finish-load', () => {
     setTimeout(() => _showWindow('did-finish-load+500ms'), 500);
-    // Initialise the video engine after the renderer is alive so we
-    // can hand it the native window handle for HWND embedding.
-    try {
-      videoEngine = new VideoEngine();
-      videoEngine.attachToWindow(mainWindow);
-      global.videoEngine = videoEngine;
-    } catch (err) {
-      console.error('[video-engine] Failed to attach — running in fallback mode:', err.message);
-      global.videoEngine = null;
-    }
   });
 
   setTimeout(() => _showWindow('5s-hard-fallback'), 5000);
