@@ -1,0 +1,1808 @@
+/* ═══════════════════════════════════════════════════════════════════
+   NovaPlay v2 — Modern Redesign (NovaTune-inspired UI)
+   Pure Black AMOLED + NovaTune signature green glow + Glass-morphism
+   Stroke-based SVG icons (Lucide), Material Design filled volume icons,
+   squiggle progress, EQ animation bars, hover-lift cards,
+   pill-shaped badges, backdrop-blur panels.
+   
+   KEY BUG FIX: .video-fallback-element CSS properly ensures video picture
+   renders. The <video> element now uses CSS-only positioning (no inline
+   style overrides), has proper z-index, and includes video-rendering hints.
+   ═══════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+*:focus { outline: none !important; }
+
+:root {
+  /* ── Theme: pure black AMOLED ── */
+  --bg:            #000000;
+  --sidebar-bg:    #0a0a0a;
+  --surface:       #141414;
+  --surface-hover: #1c1c1c;
+  --surface-active:#1f1f1f;
+  --lyrics-bg:     #080808;
+
+  /* ── Accent: NovaTune signature green ── */
+  --green:         #1ed760;
+  --green-hover:   #1fdf64;
+  --green-glow:    rgba(30, 215, 96, 0.35);
+  --green-soft:    rgba(30, 215, 96, 0.08);
+
+  /* ── Keep --accent as alias for backward compatibility ── */
+  --accent:        var(--green);
+  --accent-hover:  var(--green-hover);
+  --accent-glow:   var(--green-glow);
+  --accent-soft:   var(--green-soft);
+
+  /* ── Text ── */
+  --text-primary:   #ffffff;
+  --text-secondary:  #b3b3b3;
+  --text-muted:      #6a6a6a;
+
+  /* ── Danger ── */
+  --danger: #ff5252;
+
+  /* ── Sidebar width ── */
+  --sidebar-w: 260px;
+
+  /* ── Typography ── */
+  --app-font: "Outfit", "Segoe UI", system-ui, sans-serif;
+
+  /* ── Layout ── */
+  --titlebar-h: 32px;
+  --now-playing-h: 80px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* ── Transitions ── */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Glass morphism defaults ── */
+  --glass-bg:      rgba(14, 14, 14, 0.72);
+  --glass-border:  rgba(255, 255, 255, 0.08);
+  --glass-blur:    blur(24px) saturate(1.6);
+}
+
+/* ── Global text selection uses accent green ── */
+::selection {
+  background: color-mix(in srgb, var(--green) 40%, transparent);
+  color: var(--text-primary);
+}
+::-moz-selection {
+  background: color-mix(in srgb, var(--green) 40%, transparent);
+  color: var(--text-primary);
+}
+
+body {
+  font-family: var(--app-font);
+  background: var(--bg);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  contain: layout style;
+  -webkit-app-region: no-drag;
+}
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+}
+
+button {
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+/* ── Stroke-based SVG icon system (Feather/Lucide-style) ── */
+svg.icon-stroke {
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  width: 18px;
+  height: 18px;
+  transition: color 0.15s var(--ease), transform 0.15s var(--ease);
+}
+svg.icon-stroke:hover {
+  transform: scale(1.08);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SPLASH SCREEN — NovaTune-style with cycling icons
+   ═══════════════════════════════════════════════════════════════════ */
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.5s var(--ease), visibility 0.5s var(--ease);
+}
+.splash-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.splash-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+.splash-icon-wrap {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  opacity: 0;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+  animation: splash-fade-up 0.6s var(--ease) 0.1s forwards;
+}
+.splash-cycle-icon {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--green);
+  opacity: 0;
+  will-change: opacity;
+  animation: splash-icon-cycle 12s linear infinite;
+}
+.splash-cycle-icon:nth-of-type(1) { animation-delay: 0s; }
+.splash-cycle-icon:nth-of-type(2) { animation-delay: -3s; }
+.splash-cycle-icon:nth-of-type(3) { animation-delay: -6s; }
+.splash-cycle-icon:nth-of-type(4) { animation-delay: -9s; }
+@keyframes splash-icon-cycle {
+  0%    { opacity: 0; }
+  3.3%  { opacity: 1; }
+  21.7% { opacity: 1; }
+  25%   { opacity: 0; }
+  100%  { opacity: 0; }
+}
+.splash-icon-glow {
+  position: absolute;
+  inset: -20px;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+    color-mix(in srgb, var(--green) 100%, transparent) 0%,
+    transparent 65%
+  );
+  animation: splash-glow 3s var(--ease) infinite;
+  pointer-events: none;
+}
+@keyframes splash-glow {
+  0%, 100% { opacity: 0.06; transform: scale(1); }
+  50% { opacity: 0.14; transform: scale(1.08); }
+}
+.splash-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  opacity: 0;
+  animation: splash-fade-up 0.6s var(--ease) 0.2s forwards;
+}
+.splash-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  opacity: 0;
+  animation: splash-fade-up 0.6s var(--ease) 0.3s forwards;
+}
+.splash-progress-track {
+  width: 280px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 1px;
+  overflow: hidden;
+  opacity: 0;
+  animation: splash-fade-up 0.6s var(--ease) 0.4s forwards;
+}
+.splash-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--green);
+  border-radius: 1px;
+  transition: width 0.5s var(--ease);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--green) 40%, transparent);
+}
+@keyframes splash-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── TITLEBAR — NovaTune-style: green circle logo with play icon ── */
+.titlebar {
+  height: var(--titlebar-h);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 140px 0 16px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.titlebar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.titlebar-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* NovaTune-style: green circle with play icon SVG inside + glow shadow */
+  box-shadow: 0 0 12px color-mix(in srgb, var(--green) 50%, transparent);
+  transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease);
+  cursor: pointer;
+}
+.titlebar-logo:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--green) 50%, transparent);
+}
+.titlebar-logo svg {
+  width: 8px;
+  height: 8px;
+  fill: #000;
+  display: block;
+  margin-left: 2px;
+}
+.titlebar-name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.titlebar-right {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 8px;
+}
+
+/* ── Layout ── */
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SIDEBAR — NovaTune-style: rounded card, glass bg, stroke SVGs,
+   green left-border indicator via CSS ::before (NO inline styles)
+   ═══════════════════════════════════════════════════════════════════ */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0;
+  flex-shrink: 0;
+  border-radius: var(--radius-lg);
+  margin-left: 12px;
+  margin-bottom: 12px;
+  margin-top: 2px;
+  transition: transform 0.25s var(--ease), width 0.25s var(--ease), opacity 0.25s var(--ease);
+  z-index: 100;
+  border: 1px solid #1a1a1a;
+  position: relative;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  min-width: 200px;
+  max-width: 500px;
+}
+.sidebar::-webkit-scrollbar {
+  display: none;
+  width: 0px;
+}
+
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  transition: background 0.15s var(--ease);
+}
+.sidebar-resizer:hover,
+.sidebar-resizer.resizing {
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green-glow);
+}
+
+body.player-active .sidebar {
+  transform: translateX(-105%);
+  width: 0;
+  margin-left: 0;
+  margin-right: 0;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Sidebar Search — NovaTune glass morphism rounded style ── */
+.sidebar-search {
+  margin: 0 12px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(20, 20, 20, 0.6);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 9px 12px;
+  position: relative;
+  transition: box-shadow 0.2s var(--ease), background 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.sidebar-search:focus-within {
+  background: rgba(28, 28, 28, 0.7);
+  border-color: var(--green);
+  /* NovaTune-style: green focus ring with glow */
+  box-shadow: 0 0 0 1.5px var(--green), 0 0 12px color-mix(in srgb, var(--green) 20%, transparent);
+}
+.sidebar-search svg {
+  width: 15px;
+  height: 15px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.sidebar-search input {
+  flex: 1;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+  border: none;
+}
+.sidebar-search input::placeholder {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.sidebar-section {
+  padding: 0 8px;
+  margin-bottom: 12px;
+}
+.sidebar-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 8px 12px 6px;
+}
+
+/* ── Nav Items — NovaTune stroke-SVG style ──
+   GREEN LEFT BORDER via CSS ::before — NO inline styles needed.
+   The JS Sidebar.js no longer sets style="border-left:..." on active items. */
+.sidebar-nav-item,
+.sidebar-folder-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 16px;
+  border-radius: 6px;
+  margin: 0 8px 4px;
+  position: relative;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s var(--ease), color 0.15s var(--ease), transform 0.15s var(--ease);
+  user-select: none;
+}
+.sidebar-nav-item:hover:not(.active),
+.sidebar-folder-item:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  transform: translateX(1px);
+}
+.sidebar-nav-item.active,
+.sidebar-folder-item.active {
+  color: var(--text-primary);
+  background: var(--surface-active, #1f1f1f);
+}
+/* ── Active left accent bar — NovaTune green indicator via CSS only ── */
+.sidebar-nav-item.active::before,
+.sidebar-folder-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: var(--green);
+  border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--green) 50%, transparent);
+  opacity: 1;
+}
+.sidebar-nav-item svg,
+.sidebar-folder-item svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: color 0.15s var(--ease);
+}
+.sidebar-nav-item.active svg,
+.sidebar-folder-item.active svg {
+  color: var(--green);
+}
+
+.sidebar-folder-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-folder-remove {
+  opacity: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  transition: opacity 0.15s var(--ease), background 0.15s var(--ease), transform 0.15s var(--ease);
+}
+.sidebar-folder-item:hover .sidebar-folder-remove {
+  opacity: 1;
+}
+.sidebar-folder-remove:hover {
+  background: var(--danger);
+  transform: scale(1.1);
+}
+.sidebar-folder-remove svg {
+  width: 10px;
+  height: 10px;
+  stroke: var(--text-primary);
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+/* ── Add Folder button — NovaTune accent styling ── */
+.sidebar-add-folder {
+  margin: 8px 12px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1.5px dashed #2a2a2a;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.18s var(--ease);
+}
+.sidebar-add-folder:hover {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--green-soft);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--green) 15%, transparent);
+}
+.sidebar-add-folder svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── CONTENT ── */
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  border-radius: var(--radius-lg);
+  margin: 2px 12px 12px 0;
+  background: var(--bg);
+  transition: margin 0.25s var(--ease);
+}
+body.player-active .content {
+  margin: 0;
+  border-radius: 0;
+}
+.content-header {
+  padding: 24px 28px 16px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+}
+.content-header-text { min-width: 0; }
+.content-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-bottom: 6px;
+}
+.content-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   VIDEO GRID — NovaTune-style cards with hover-lift, glass-morphism,
+   pill-shaped duration badge, NovaTune green play overlay
+   ═══════════════════════════════════════════════════════════════════ */
+.video-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 20px 100px;
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a2a transparent;
+}
+.video-grid::-webkit-scrollbar { width: 8px; }
+.video-grid::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
+.video-grid::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+
+.video-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  padding: 0;
+  background: transparent;
+  transition: transform 0.22s var(--ease-bounce);
+}
+.video-card:hover {
+  /* NovaTune-style hover-lift effect */
+  transform: translateY(-4px);
+}
+
+/* ── Thumbnail container — glass-morphism with gradient border ── */
+.video-card-thumb-wrap {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  transition: box-shadow 0.22s var(--ease), border-color 0.22s var(--ease);
+}
+.video-card:hover .video-card-thumb-wrap {
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.6),
+    0 0 20px color-mix(in srgb, var(--green) 12%, transparent);
+  border-color: color-mix(in srgb, var(--green) 30%, transparent);
+}
+.video-card-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--surface);
+}
+.video-card-thumb-blurup {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(18px) saturate(1.4);
+  transform: scale(1.1);
+  opacity: 1;
+  transition: opacity 0.4s var(--ease);
+}
+.video-card-thumb-blurup.hidden { opacity: 0; }
+
+/* ── Duration badge — NovaTune pill-shaped design ── */
+.video-card-duration {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ── Play overlay — NovaTune accent play button ── */
+.video-card-play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.22s var(--ease);
+}
+.video-card:hover .video-card-play-overlay { opacity: 1; }
+.video-card-play-button {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* NovaTune-style: green circle with glow + outer ring */
+  box-shadow:
+    0 0 24px var(--green-glow),
+    0 0 0 3px color-mix(in srgb, var(--green) 20%, transparent);
+  transform: scale(0.85);
+  transition: transform 0.18s var(--ease-bounce);
+}
+.video-card:hover .video-card-play-button { transform: scale(1); }
+.video-card-play-button svg {
+  width: 20px;
+  height: 20px;
+  fill: #000;
+  /* Play icon inside green circle — filled like NovaTune */
+  margin-left: 2px;
+}
+
+.video-card-info { padding: 0 4px; }
+.video-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+  transition: color 0.15s var(--ease);
+}
+.video-card:hover .video-card-title {
+  color: var(--green);
+}
+.video-card-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.video-card-meta-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px;
+}
+.empty-state svg {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 16px;
+  opacity: 0.4;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.empty-state-title {
+  font-size: 18px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+.empty-state-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   VIDEO SCREEN — Full player view
+   ═══════════════════════════════════════════════════════════════════ */
+.video-screen {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.video-screen.hidden {
+  display: none;
+}
+
+/* ── video-area: container for both libVLC HWND and HTML5 <video> ── */
+.video-area {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   BUG FIX: video-fallback-element CSS
+   
+   ROOT CAUSE OF THE BUG:
+   The original CSS had `.video-fallback-element` with `display: none`
+   and `.video-fallback-element.active` with `display: block; z-index: 1`.
+   But useFallback() in JS was ALSO setting inline styles:
+   `zIndex: '2'`, `width: '100%'`, `height: '100%'`, `position: 'absolute'`,
+   `objectFit: 'contain'`. These inline styles could conflict with the
+   CSS `position:absolute; inset:0` rule — specifically:
+   
+   1. Inline `width/height: 100%` combined with CSS `inset: 0` is redundant
+      but could cause layout confusion in some Chromium versions.
+   2. The `<video>` element lacked `playsinline` attribute, which on some
+      WebKit/Electron builds prevents video frames from rendering inline.
+   3. The `<video>` element had no `video-rendering` CSS hint, resulting
+      in blurry or degraded frame rendering on some GPU configs.
+   
+   FIX:
+   - Remove ALL inline style setting from JS useFallback() — let CSS handle it
+   - Add `position: absolute; inset: 0` for proper positioning (no inline override)
+   - Set `z-index: 2` in CSS (above video-area background, below controls overlay)
+   - Add `video-rendering: crisp-edges` for sharp frame rendering
+   - The `.active` class now handles everything: display, positioning, z-index
+   ═══════════════════════════════════════════════════════════════════ */
+.video-fallback-element {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+  display: none;           /* Hidden by default — no video loaded */
+  z-index: 2;              /* Above video-area bg, below controls overlay (z-index:10) */
+  /* ── BUG FIX: video-rendering for sharp frames ── */
+  video-rendering: crisp-edges;
+  -webkit-video-rendering: crisp-edges;
+}
+.video-fallback-element.active {
+  display: block;           /* Show video element when activated */
+  z-index: 2;              /* Ensure it's above the black background */
+  /* All positioning is handled by the base rule — no overrides needed */
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PLAYER CONTROLS OVERLAY — NovaTune-style with gradient backdrop,
+   pill-shaped buttons, glow effects, squiggle progress, proper auto-hide
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── BUG FIX: overlay must NOT permanently block video ── */
+.player-controls-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s var(--ease);
+  z-index: 10;
+}
+.player-controls-overlay.visible {
+  opacity: 1;
+}
+.player-controls-overlay.visible * {
+  pointer-events: auto;
+}
+
+.player-controls-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, transparent 100%);
+}
+.player-controls-top-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.player-back-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s var(--ease), transform 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+.player-back-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+}
+.player-back-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: var(--text-primary);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.player-video-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+.player-controls-top-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+/* ── NovaTune-style icon buttons ── */
+.player-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s var(--ease), transform 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+.player-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  transform: scale(1.05);
+}
+.player-icon-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: var(--text-primary);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: color 0.15s var(--ease);
+}
+.player-icon-btn.active {
+  background: var(--green);
+  box-shadow: 0 0 16px var(--green-glow);
+}
+.player-icon-btn.active svg {
+  stroke: #000;
+  fill: none;
+}
+
+.player-controls-bottom {
+  padding: 20px 24px 24px;
+  background: linear-gradient(0deg, rgba(0,0,0,0.85) 0%, transparent 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   PROGRESS BAR — NovaTune-style: squiggle/wave SVG animation,
+   glow fill, hover-expand track, accent-colored handle
+   ═══════════════════════════════════════════════════════════════════ */
+.progress-bar-wrap {
+  position: relative;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px 0;
+}
+.progress-bar-track {
+  position: relative;
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  overflow: visible;
+  transition: height 0.15s var(--ease);
+}
+.progress-bar-wrap:hover .progress-bar-track {
+  height: 5px;
+}
+.progress-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--green);
+  border-radius: 999px;
+  width: 0%;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--green) 40%, transparent);
+  transition: width 0.1s linear, box-shadow 0.15s var(--ease);
+}
+.progress-bar-wrap:hover .progress-bar-fill {
+  box-shadow:
+    0 0 12px color-mix(in srgb, var(--green) 50%, transparent),
+    0 0 24px color-mix(in srgb, var(--green) 25%, transparent);
+}
+.progress-bar-handle {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  background: var(--green);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  box-shadow: 0 0 12px var(--green-glow);
+  transition: transform 0.15s var(--ease);
+}
+.progress-bar-wrap:hover .progress-bar-handle {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* ── Squiggle wave animation on progress fill ── */
+.progress-bar-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0px,
+    transparent 2px,
+    rgba(255, 255, 255, 0.08) 2px,
+    rgba(255, 255, 255, 0.08) 4px
+  );
+  animation: squiggle-shift 0.8s linear infinite;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease);
+}
+.progress-bar-wrap:hover .progress-bar-fill::after {
+  opacity: 1;
+}
+@keyframes squiggle-shift {
+  from { background-position-x: 0; }
+  to { background-position-x: 4px; }
+}
+
+/* Hover bubble showing timestamp */
+.progress-bubble {
+  position: absolute;
+  bottom: 24px;
+  transform: translateX(-50%);
+  background: var(--green);
+  color: #000;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--green) 40%, transparent);
+}
+.progress-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: var(--green);
+}
+.progress-bar-wrap:hover .progress-bubble { opacity: 1; }
+
+/* Time row */
+.progress-time-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+}
+
+/* Bottom controls row */
+.player-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.player-controls-left,
+.player-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.player-controls-center {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* ── NovaTune-style play button with accent glow ── */
+.player-play-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 24px var(--green-glow), 0 0 0 3px color-mix(in srgb, var(--green) 15%, transparent);
+  transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+.player-play-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 32px var(--green-glow), 0 0 0 4px color-mix(in srgb, var(--green) 20%, transparent);
+}
+.player-play-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: #000;
+  /* NovaTune-style: filled polygon inside green circle */
+  margin-left: 2px;
+}
+
+/* ── NovaTune-style control buttons with stroke SVGs ── */
+.player-controls-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: color 0.15s var(--ease), background 0.15s var(--ease), transform 0.15s var(--ease);
+}
+.player-controls-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(1.05);
+}
+.player-controls-btn.active {
+  color: var(--green);
+  filter: drop-shadow(0 0 6px var(--green-glow));
+}
+.player-controls-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── Volume slider — NovaTune glow style ── */
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 120px;
+}
+.volume-bar-wrap {
+  position: relative;
+  flex: 1;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.volume-bar-track {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  position: relative;
+  transition: height 0.15s var(--ease);
+}
+.volume-bar-wrap:hover .volume-bar-track { height: 5px; }
+.volume-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--green);
+  border-radius: 999px;
+  width: 80%;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--green) 30%, transparent);
+}
+.volume-bar-handle {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  background: var(--green);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  box-shadow: 0 0 8px var(--green-glow);
+  transition: transform 0.15s var(--ease);
+}
+.volume-bar-wrap:hover .volume-bar-handle { transform: translate(-50%, -50%) scale(1); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   NOW PLAYING BAR — NovaTune-style: glass-morphism background,
+   EQ animation bars, backdrop blur, better progress indicator
+   ═══════════════════════════════════════════════════════════════════ */
+.now-playing-bar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  background: rgba(14, 14, 14, 0.72);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 30;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  transition: transform 0.3s var(--ease), opacity 0.3s var(--ease), box-shadow 0.3s var(--ease);
+}
+.now-playing-bar:hover {
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.7),
+    0 0 20px color-mix(in srgb, var(--green) 8%, transparent),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+}
+.now-playing-bar.hidden {
+  transform: translateX(-50%) translateY(20px);
+  opacity: 0;
+  pointer-events: none;
+}
+.now-playing-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--surface);
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transition: filter 0.3s var(--ease);
+}
+.now-playing-thumb.paused {
+  filter: brightness(0.6);
+}
+
+/* ── EQ Animation Bars — NovaTune-style for "currently playing" indicator ── */
+.now-playing-eq,
+#now-playing-eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+  padding: 0 2px;
+}
+.now-playing-eq .eq-bar,
+#now-playing-eq .eq-bar {
+  width: 3px;
+  background: var(--green);
+  border-radius: 2px;
+  animation: eq-bounce 0.8s ease-in-out infinite alternate;
+  animation-play-state: paused;
+  transform-origin: bottom;
+  transition: background 0.15s var(--ease);
+}
+.now-playing-eq .eq-bar:nth-child(1),
+#now-playing-eq .eq-bar:nth-child(1) {
+  height: 10px;
+  animation-delay: 0s;
+}
+.now-playing-eq .eq-bar:nth-child(2),
+#now-playing-eq .eq-bar:nth-child(2) {
+  height: 16px;
+  animation-delay: 0.15s;
+}
+.now-playing-eq .eq-bar:nth-child(3),
+#now-playing-eq .eq-bar:nth-child(3) {
+  height: 8px;
+  animation-delay: 0.3s;
+}
+/* Run EQ animation when playing — controlled by adding .is-playing class */
+.now-playing-eq.is-playing .eq-bar,
+#now-playing-eq.is-playing .eq-bar {
+  animation-play-state: running;
+}
+
+.now-playing-info {
+  flex: 1;
+  min-width: 0;
+}
+.now-playing-title {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+  transition: color 0.15s var(--ease);
+}
+.now-playing-title:hover {
+  color: var(--green);
+}
+.now-playing-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.now-playing-progress {
+  width: 100%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 1px;
+  overflow: hidden;
+  margin-top: 4px;
+  position: relative;
+}
+.now-playing-progress-fill {
+  height: 100%;
+  background: var(--green);
+  width: 0%;
+  transition: width 0.3s linear;
+  box-shadow: 0 0 4px color-mix(in srgb, var(--green) 35%, transparent);
+  border-radius: 1px;
+}
+.now-playing-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+/* ── NovaTune-style play button with accent glow ── */
+.now-playing-play-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 16px var(--green-glow);
+  transition: transform 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+.now-playing-play-btn:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0 24px var(--green-glow);
+}
+.now-playing-play-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: #000;
+  margin-left: 1px;
+}
+.now-playing-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: color 0.15s var(--ease), background 0.15s var(--ease), transform 0.15s var(--ease);
+}
+.now-playing-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(1.05);
+}
+.now-playing-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.now-playing-expand {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: color 0.15s var(--ease), transform 0.15s var(--ease);
+}
+.now-playing-expand:hover {
+  color: var(--green);
+  transform: scale(1.05);
+}
+.now-playing-expand svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SETTINGS PANEL — NovaTune-style modal with backdrop blur,
+   glass-morphism card, modern toggles, color swatches with glow
+   ═══════════════════════════════════════════════════════════════════ */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s var(--ease), visibility 0.2s var(--ease);
+}
+.settings-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+.settings-panel {
+  background: rgba(12, 12, 12, 0.88);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-xl);
+  width: min(560px, calc(100vw - 48px));
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 28px;
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.settings-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+.settings-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: color 0.15s var(--ease), background 0.15s var(--ease), transform 0.15s var(--ease);
+}
+.settings-close:hover {
+  color: var(--text-primary);
+  background: var(--surface);
+  transform: scale(1.05);
+}
+.settings-close svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.settings-section {
+  margin-bottom: 24px;
+}
+.settings-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #1a1a1a;
+}
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  font-size: 14px;
+}
+.settings-row-label {
+  color: var(--text-secondary);
+  flex: 1;
+}
+.settings-row-control { display: flex; align-items: center; gap: 8px; }
+
+.settings-input {
+  background: var(--surface);
+  border: 1px solid #1a1a1a;
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+  min-width: 200px;
+}
+.settings-input:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--green) 20%, transparent);
+}
+
+.settings-select {
+  background: var(--surface);
+  border: 1px solid #1a1a1a;
+  border-radius: var(--radius-sm);
+  padding: 8px 28px 8px 12px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b3b3b3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+  transition: border-color 0.15s var(--ease);
+}
+.settings-select:focus { border-color: var(--green); }
+.settings-select option { background: var(--surface); color: var(--text-primary); }
+
+/* ── Color swatches — NovaTune-style with glow ── */
+.settings-color-swatch-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.settings-color-swatch {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.15s var(--ease-bounce), border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+  position: relative;
+}
+.settings-color-swatch:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.1);
+}
+.settings-color-swatch.active {
+  border-color: var(--text-primary);
+  transform: scale(1.1);
+  /* NovaTune-style: glow when active */
+  box-shadow: 0 0 12px color-mix(in srgb, var(--green) 40%, transparent);
+}
+
+/* ── NovaTune-style toggle switch ── */
+.settings-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--surface);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s var(--ease), box-shadow 0.2s var(--ease);
+}
+.settings-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: transform 0.2s var(--ease), background 0.2s var(--ease);
+}
+.settings-toggle.on {
+  background: var(--green);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--green) 30%, transparent);
+}
+.settings-toggle.on::after {
+  transform: translateX(16px);
+  background: #000;
+}
+
+.settings-reset-btn {
+  margin-top: 12px;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid #2a2a2a;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s var(--ease);
+}
+.settings-reset-btn:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  box-shadow: 0 0 8px rgba(255, 82, 82, 0.15);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TRACK MENU — NovaTune-style popover with glass background,
+   backdrop blur, subtle border, better check indicators
+   ═══════════════════════════════════════════════════════════════════ */
+.track-menu {
+  position: absolute;
+  bottom: 80px;
+  right: 24px;
+  background: rgba(12, 12, 12, 0.72);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 100;
+  display: none;
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+.track-menu.visible { display: block; }
+.track-menu-title {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 6px 10px 8px;
+}
+.track-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: background 0.15s var(--ease), color 0.15s var(--ease), transform 0.15s var(--ease);
+}
+.track-menu-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  transform: translateX(1px);
+}
+.track-menu-item.active {
+  color: var(--green);
+}
+.track-menu-item-check {
+  width: 14px;
+  height: 14px;
+  opacity: 0;
+  stroke: var(--green);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.track-menu-item.active .track-menu-item-check {
+  opacity: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TOOLTIP — NovaTune-style with glass background
+   ═══════════════════════════════════════════════════════════════════ */
+.tooltip {
+  position: fixed;
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 9999;
+  white-space: nowrap;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  opacity: 0;
+  transition: opacity 0.15s var(--ease);
+}
+.tooltip.visible { opacity: 1; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   EQ ANIMATION BARS — NovaTune-style (reusable anywhere)
+   Three thin bars that bounce in alternating rhythm when playing.
+   Animation-play-state: paused by default, running when parent
+   has .is-playing class.
+   ═══════════════════════════════════════════════════════════════════ */
+.eq-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+  padding: 0 2px;
+}
+.eq-bar {
+  width: 3px;
+  background: var(--green);
+  border-radius: 2px;
+  animation: eq-bounce 0.8s ease-in-out infinite alternate;
+  animation-play-state: paused;
+  transform-origin: bottom;
+  transition: background 0.15s var(--ease);
+}
+.eq-bar:nth-child(1) {
+  height: 10px;
+  animation-delay: 0s;
+}
+.eq-bar:nth-child(2) {
+  height: 16px;
+  animation-delay: 0.15s;
+}
+.eq-bar:nth-child(3) {
+  height: 8px;
+  animation-delay: 0.3s;
+}
+/* Run animation when parent is playing */
+.eq-bars.is-playing .eq-bar {
+  animation-play-state: running;
+}
+@keyframes eq-bounce {
+  0% { transform: scaleY(0.3); }
+  100% { transform: scaleY(1); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ANIMATIONS — Shared keyframes
+   ═══════════════════════════════════════════════════════════════════ */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-thumb {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-hover) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-md);
+}
+
+/* Loading spinner */
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--green) 30%, transparent);
+}
+
+/* ── NovaTune-style pill buttons ── */
+.pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: 20px;
+  background: var(--green);
+  color: #000;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  transition: opacity 0.15s var(--ease), transform 0.1s var(--ease), box-shadow 0.15s var(--ease);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--green) 25%, transparent);
+}
+.pill-btn:hover {
+  opacity: 0.9;
+  transform: scale(1.02);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--green) 35%, transparent);
+}
+.pill-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: #000;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── NovaTune-style glass card ── */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  transition: box-shadow 0.22s var(--ease), transform 0.22s var(--ease-bounce);
+}
+.glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 20px 56px rgba(0, 0, 0, 0.6),
+    0 0 20px color-mix(in srgb, var(--green) 8%, transparent),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+}
+
+/* Hidden utility — used for empty-state, video-screen, splash, etc.
+   NOT applied to .now-playing-bar which uses opacity+transform instead */
+.hidden { display: none !important; }
+.now-playing-bar.hidden { display: flex !important; opacity: 0; pointer-events: none; transform: translateX(-50%) translateY(20px); }

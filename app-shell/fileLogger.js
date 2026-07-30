@@ -1,12 +1,13 @@
 /**
- * NovaPlay — File Logger
- * Reused pattern from NovaTune. Captures every console.log/error to a
- * rotating log file in userData so packaged-exe users can send logs.
+ ** NovaPlay — File Logger
+ *! Reused pattern from NovaTune. Captures every console.log/error to a
+ ** rotating log file in userData so packaged-exe users can send logs.
  */
 
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
+
 
 let _stream = null;
 let _buffer = [];
@@ -95,3 +96,5 @@ function formatArgs(args) {
 }
 
 module.exports = { initFileLogger, closeFileLogger };
+
+

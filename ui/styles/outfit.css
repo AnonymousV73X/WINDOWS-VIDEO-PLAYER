@@ -1,0 +1,40 @@
+/* ═══════════════════════════════════════════════════════════════════
+   NovaPlay — Outfit font face declarations (offline-bundled)
+   All weights 300-700 are local TTFs in /assets/fonts/. No network.
+   ═══════════════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: "Outfit";
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+  src: url("../../assets/fonts/outfit-300.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Outfit";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("../../assets/fonts/outfit-400.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Outfit";
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url("../../assets/fonts/outfit-500.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Outfit";
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  src: url("../../assets/fonts/outfit-600.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Outfit";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("../../assets/fonts/outfit-700.ttf") format("truetype");
+}
