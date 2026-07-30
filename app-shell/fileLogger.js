@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 
+
 let _stream = null;
 let _buffer = [];
 let _flushTimer = null;
