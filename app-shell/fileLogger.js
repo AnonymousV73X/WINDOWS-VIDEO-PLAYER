@@ -1,4 +1,4 @@
-/**
+/!**
  * NovaPlay — File Logger
  * Reused pattern from NovaTune. Captures every console.log/error to a
  * rotating log file in userData so packaged-exe users can send logs.
