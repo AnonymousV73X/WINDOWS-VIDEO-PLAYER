@@ -1,166 +1,229 @@
 /**
- * NovaPlay v2 — Sidebar Component
+ * NovaPlay — Sidebar (NovaTune-style)
  *
- * Renders the left navigation rail: search box, library/folders section,
- * playlists section, and "Add folder" button. Mirrors NovaTune's
- * Sidebar.js layout, adapted for video library.
- *
- * v2 CHANGE: Removed inline `style="border-left: 3px solid var(--accent);"` 
- * from active nav items. The green left-border indicator is now handled
- * entirely by CSS ::before pseudo-element on `.sidebar-nav-item.active` 
- * and `.sidebar-folder-item.active` — cleaner and more maintainable.
+ * Left navigation: search, browse nav, folders, playlists.
+ * NovaTune aesthetic: floating card, 12px radius, active item with green
+ * left-border indicator (::before), search input with green focus ring.
  */
 
 class Sidebar {
   constructor() {
-    this.el = document.getElementById('sidebar');
+    this.container = document.getElementById('sidebar');
+    this.searchInput = document.getElementById('search-input');
+    this.searchClear = document.getElementById('search-clear');
+    this.navItems = document.querySelectorAll('.nav-item');
+    this.foldersContainer = document.getElementById('sidebar-folders');
+    this.playlistsContainer = document.getElementById('sidebar-playlists');
+    this.playlistsSection = document.getElementById('sidebar-playlists-section');
+    this.addFolderBtn = document.getElementById('add-folder-btn');
+    this.createPlaylistBtn = document.getElementById('create-playlist-btn');
+    this.resizer = document.getElementById('sidebar-resizer');
+
+    this._activeSection = 'library';
+    this._folders = [];
+    this._playlists = [];
     this._callbacks = {};
+    this._handlers = [];
+    this._searchDebounce = null;
+
+    this._init();
   }
 
-  init(callbacks) {
+  init(callbacks = {}) {
     this._callbacks = callbacks;
-    this._bindEvents();
   }
 
-  _bindEvents() {
-    // Delegated click handler — single listener for all nav items
-    this.el.addEventListener('click', (e) => {
-      const removeBtn = e.target.closest('.sidebar-folder-remove');
-      if (removeBtn) {
-        e.stopPropagation();
-        const folder = removeBtn.dataset.folder;
-        if (folder) this._callbacks.onRemoveFolder?.(folder);
-        return;
-      }
-      const navItem = e.target.closest('.sidebar-nav-item');
-      if (navItem?.dataset.section) {
-        this._callbacks.onNavClick?.(navItem.dataset.section);
-        return;
-      }
-      const folderItem = e.target.closest('.sidebar-folder-item');
-      if (folderItem) {
-        const folder = folderItem.dataset.folder;
-        if (folder) {
-          this._callbacks.onFolderClick?.(folder);
-          return;
-        }
-        const playlist = folderItem.dataset.playlist;
-        if (playlist) {
-          this._callbacks.onNavClick?.('playlists');
-          return;
-        }
-      }
-      const addBtn = e.target.closest('.sidebar-add-folder');
-      if (addBtn) {
-        this._callbacks.onAddFolder?.();
-        return;
-      }
+  _init() {
+    this._initNavigation();
+    this._initSearch();
+    this._initResizer();
+  }
+
+  // ═══ Navigation ═════════════════════════════════════════════════
+  _initNavigation() {
+    for (const item of this.navItems) {
+      this._addHandler(item, 'click', () => {
+        const section = item.dataset.section;
+        this.setActiveSection(section);
+        this._callbacks.onNavigate?.(section);
+      });
+    }
+
+    this._addHandler(this.addFolderBtn, 'click', () => {
+      this._callbacks.onAddFolder?.();
     });
 
-    // Search input — debounced filter
-    const searchInput = this.el.querySelector('#sidebar-search-input');
-    if (searchInput) {
-      searchInput.addEventListener('input', Utils.debounce((e) => {
-        const q = e.target.value.toLowerCase().trim();
-        window.dispatchEvent(new CustomEvent('novaplay:filter', { detail: q }));
-      }, 150));
+    this._addHandler(this.createPlaylistBtn, 'click', () => {
+      this._callbacks.onCreatePlaylist?.();
+    });
+  }
+
+  setActiveSection(section) {
+    this._activeSection = section;
+    for (const item of this.navItems) {
+      item.classList.toggle('active', item.dataset.section === section);
+    }
+    // Show playlists list when in playlists section
+    if (this.playlistsSection) {
+      this.playlistsSection.style.display = (section === 'playlists') ? 'block' : 'none';
     }
   }
 
-  render(state) {
-    if (!this.el) return;
-    const folders = state.settings?.scanFolders || [];
-    const playlists = state.playlists || [];
+  // ═══ Search ═════════════════════════════════════════════════════
+  _initSearch() {
+    this._addHandler(this.searchInput, 'input', () => {
+      const q = this.searchInput.value;
+      this.searchClear.classList.toggle('visible', q.length > 0);
 
-    this.el.innerHTML = `
-      <div class="sidebar-search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="sidebar-search-input" placeholder="Search videos" autocomplete="off" spellcheck="false">
-      </div>
+      // Debounce
+      if (this._searchDebounce) clearTimeout(this._searchDebounce);
+      this._searchDebounce = setTimeout(() => {
+        this._callbacks.onSearch?.(q);
+      }, 250);
+    });
 
-      <div class="sidebar-section">
-        <div class="sidebar-section-title">Browse</div>
-        <!-- v2: NO inline style on active items — CSS ::before handles the green left border -->
-        <div class="sidebar-nav-item ${state.activeView === 'library' ? 'active' : ''}" data-section="library">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
-          <span>Library</span>
-        </div>
-        <div class="sidebar-nav-item ${state.activeView === 'history' ? 'active' : ''}" data-section="history">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          <span>Watch History</span>
-        </div>
-        <div class="sidebar-nav-item ${state.activeView === 'playlists' ? 'active' : ''}" data-section="playlists">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/><circle cx="18" cy="18" r="3"/><path d="M21 18v5"/></svg>
-          <span>Playlists</span>
-        </div>
-      </div>
+    this._addHandler(this.searchClear, 'click', () => {
+      this.searchInput.value = '';
+      this.searchClear.classList.remove('visible');
+      this._callbacks.onSearch?.('');
+    });
 
-      <div class="sidebar-section">
-        <div class="sidebar-section-title">Folders</div>
-        ${folders.length === 0
-          ? '<div style="padding: 8px 12px; font-size: 12px; color: var(--text-muted);">No folders added yet</div>'
-          : folders.map(f => `
-            <!-- v2: NO inline style on active — CSS ::before handles green border -->
-            <div class="sidebar-folder-item ${state.activeView === 'folder' && state.activeFolder === f ? 'active' : ''}" data-folder="${Utils.escape(f)}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-              <span class="sidebar-folder-name" title="${Utils.escape(f)}">${Utils.escape(f.split(/[\\/]/).pop())}</span>
-              <button class="sidebar-folder-remove" data-folder="${Utils.escape(f)}" title="Remove folder">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-          `).join('')
-        }
-        <button class="sidebar-add-folder">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          <span>Add folder</span>
-        </button>
-      </div>
-
-      ${playlists.length > 0 ? `
-        <div class="sidebar-section">
-          <div class="sidebar-section-title">Playlists</div>
-          ${playlists.map(p => `
-            <div class="sidebar-folder-item" data-playlist="${Utils.escape(p.id)}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/><circle cx="18" cy="18" r="3"/><path d="M21 18v5"/></svg>
-              <span class="sidebar-folder-name" title="${Utils.escape(p.name)}">${Utils.escape(p.name)}</span>
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-      <div class="sidebar-resizer" id="sidebar-resizer"></div>
-    `;
-    this._bindResizer();
+    // Keyboard shortcut: Ctrl/Cmd+F focuses search
+    this._addHandler(document, 'keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        this.searchInput.focus();
+        this.searchInput.select();
+      }
+    });
   }
 
-  _bindResizer() {
-    const resizer = this.el.querySelector('#sidebar-resizer');
-    if (!resizer || resizer.dataset.bound) return;
-    resizer.dataset.bound = 'true';
+  // ═══ Folders ════════════════════════════════════════════════════
+  setFolders(folders) {
+    this._folders = folders || [];
+    this._renderFolders();
+  }
 
+  _renderFolders() {
+    this.foldersContainer.innerHTML = '';
+    for (const folder of this._folders) {
+      const el = document.createElement('div');
+      el.className = 'sidebar-folder-item';
+      el.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span class="folder-name" title="${this._escape(folder)}">${this._escape(folder.split(/[\\/]/).pop() || folder)}</span>
+        <button class="folder-remove" title="Remove">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="2" y1="2" x2="8" y2="8"/>
+            <line x1="8" y1="2" x2="2" y2="8"/>
+          </svg>
+        </button>
+      `;
+      this._addHandler(el.querySelector('.folder-remove'), 'click', (e) => {
+        e.stopPropagation();
+        this._callbacks.onRemoveFolder?.(folder);
+      });
+      this._addHandler(el, 'click', () => {
+        this._callbacks.onFolderClick?.(folder);
+      });
+      this.foldersContainer.appendChild(el);
+    }
+  }
+
+  // ═══ Playlists ══════════════════════════════════════════════════
+  setPlaylists(playlists) {
+    this._playlists = playlists || [];
+    this._renderPlaylists();
+  }
+
+  _renderPlaylists() {
+    this.playlistsContainer.innerHTML = '';
+    for (const pl of this._playlists) {
+      const el = document.createElement('div');
+      el.className = 'sidebar-folder-item';
+      el.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+          <path d="M3 5h18M3 12h18M3 19h12"/>
+        </svg>
+        <span class="folder-name" title="${this._escape(pl.name)}">${this._escape(pl.name)}</span>
+        <button class="folder-remove" title="Delete">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="2" y1="2" x2="8" y2="8"/>
+            <line x1="8" y1="2" x2="2" y2="8"/>
+          </svg>
+        </button>
+      `;
+      this._addHandler(el.querySelector('.folder-remove'), 'click', (e) => {
+        e.stopPropagation();
+        this._callbacks.onDeletePlaylist?.(pl.id);
+      });
+      this._addHandler(el, 'click', () => {
+        this._callbacks.onPlaylistClick?.(pl.id);
+      });
+      this.playlistsContainer.appendChild(el);
+    }
+  }
+
+  // ═══ Resizer ════════════════════════════════════════════════════
+  _initResizer() {
     let startX = 0;
-    let startWidth = 0;
+    let startW = 0;
+    let dragging = false;
 
-    const onMouseMove = (e) => {
-      const deltaX = e.clientX - startX;
-      let newWidth = Math.max(200, Math.min(500, startWidth + deltaX));
-      document.documentElement.style.setProperty('--sidebar-w', newWidth + 'px');
-    };
-
-    const onMouseUp = () => {
-      resizer.classList.remove('resizing');
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-    };
-
-    resizer.addEventListener('mousedown', (e) => {
-      e.preventDefault();
+    this._addHandler(this.resizer, 'mousedown', (e) => {
+      dragging = true;
       startX = e.clientX;
-      startWidth = this.el.offsetWidth;
-      resizer.classList.add('resizing');
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
+      startW = this.container.offsetWidth;
+      this.resizer.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
     });
+
+    this._addHandler(document, 'mousemove', (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const newW = Math.max(200, Math.min(500, startW + dx));
+      this.container.style.width = newW + 'px';
+      document.documentElement.style.setProperty('--sidebar-w', newW + 'px');
+    });
+
+    this._addHandler(document, 'mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      this.resizer.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      this._callbacks.onResize?.(this.container.offsetWidth);
+    });
+  }
+
+  // ═══ Library count badge ════════════════════════════════════════
+  setLibraryCount(n) {
+    const badge = document.getElementById('library-count');
+    if (badge) {
+      badge.textContent = n > 0 ? String(n) : '';
+    }
+  }
+
+  // ═══ Helpers ════════════════════════════════════════════════════
+  _escape(s) {
+    if (s == null) return '';
+    return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  }
+
+  _addHandler(el, ev, fn, opts) {
+    el.addEventListener(ev, fn, opts);
+    this._handlers.push({ el, ev, fn });
+  }
+
+  destroy() {
+    for (const { el, ev, fn } of this._handlers) {
+      try { el.removeEventListener(ev, fn); } catch (_) {}
+    }
+    this._handlers = [];
   }
 }
 
-window.Sidebar = Sidebar;
+module.exports = Sidebar;

@@ -1,7 +1,7 @@
 {
   "name": "novaplay",
-  "version": "1.0.0",
-  "description": "NovaPlay — A premium Windows video player with libVLC engine and NovaTune-dark aesthetics. 100% offline.",
+  "version": "2.0.0",
+  "description": "NovaPlay v2 — Revolutionary video player with unified libVLC embedding, NovaTune-inspired UI, VLC-orange accent, dark/light mode. Supports every format from h264 to 10-bit x265.",
   "main": "app-shell/main.js",
   "author": "NovaPlay",
   "license": "MIT",
@@ -16,8 +16,6 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
-    "chokidar": "^3.5.3",
-    "fluent-ffmpeg": "^2.1.3",
     "koffi": "^2.9.1",
     "sharp": "^0.33.5"
   },
@@ -45,7 +43,9 @@
       "ui/**/*",
       "local-data/**/*",
       "assets/**/*",
+      "scripts/**/*",
       "package.json"
     ]
   }
 }
+

@@ -178,7 +178,7 @@ const windowState = new WindowStateManager('main', {
 function createMainWindow() {
   const { x, y, width, height, isMaximized } = windowState.getState();
 
-  let initAccentColor = '#1ed760';
+  let initAccentColor = '#FF8800';  // VLC orange (default)
   try {
     const dataDir = process.env.NODE_ENV === 'development'
       ? path.join(__dirname, '..', 'data')
@@ -198,7 +198,7 @@ function createMainWindow() {
     minWidth: 720,
     minHeight: 480,
     show: false,
-    backgroundColor: '#000000',
+    backgroundColor: '#121212',     // matches --bg (dark theme default)
     title: 'NovaPlay',
     titleBarStyle: 'hidden',
     titleBarOverlay: process.platform === 'win32'

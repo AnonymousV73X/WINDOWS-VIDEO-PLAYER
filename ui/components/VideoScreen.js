@@ -1,30 +1,22 @@
 /**
- * NovaPlay v2 — Video Screen (full player view)
+ * NovaPlay — VideoScreen (REVOLUTIONIZED v2)
  *
- * CRITICAL BUG FIX: The original code had a bug where only audio played
- * but no video picture was displayed. The root cause:
+ * The unified video surface — no more separate VLC window.
  *
- *   1. The CSS `.video-fallback-element` had `display: none` by default,
- *      and `.video-fallback-element.active` set `display: block; z-index: 1`.
- *   2. But `useFallback()` also set inline styles including `zIndex: '2'`,
- *      `width: '100%'`, `height: '100%'`, etc. The inline z-index=2 was
- *      correct, but the `<video>` element lacked `playsinline` attribute
- *      and proper `video-rendering` CSS.
- *   3. More importantly, the `<video>` element's `position:absolute; inset:0`
- *      in CSS combined with inline `width/height: 100%` style setting
- *      created potential layout conflicts.
+ * Key responsibilities:
+ *   1. Show/hide the video screen.
+ *   2. Report the .video-area rect to the main process (via nova:video-rect)
+ *      so the libVLC child HWND can be SetWindowPos'd to overlay it.
+ *   3. Drive the controls overlay (auto-hide on idle, show on mousemove).
+ *   4. Wire up the PlayerControls component (seek, volume, transport).
+ *   5. Wire up the TrackMenu (audio/subtitle/chapter selector).
+ *   6. HTML5 fallback <video> element when libVLC is unavailable.
+ *   7. Fullscreen handling (real OS fullscreen via nova:window-set-fullscreen).
  *
- * FIX APPROACH:
- *   - Ensure `playsinline` attribute is set on the <video> element
- *   - Use CSS class `.active` exclusively for visibility (no inline style overrides)
- *   - Add `crisp-edges` video-rendering CSS hint for sharp frames
- *   - Add debug logging for video rendering issues
- *   - Add `loadeddata` listener to confirm video frames are actually available
- *
- * Manages the full-screen video player overlay. Handles:
- *   - Reporting the video-area's screen-space rect to the main process
- *   - Falling back to HTML5 <video> element when libVLC isn't available
- *   - Auto-hiding the controls overlay after inactivity
+ * The .video-area div is TRANSPARENT (see main.css §10) — the libVLC child
+ * HWND sits behind it in z-order, painted by libVLC's Direct3D output.
+ * The child HWND is kept HWND_TOPMOST so it stays above Chromium's GPU
+ * compositor surface (a sibling HWND).
  */
 
 class VideoScreen {
@@ -32,234 +24,160 @@ class VideoScreen {
     this.screen = document.getElementById('video-screen');
     this.videoArea = document.getElementById('video-area');
     this.fallbackEl = document.getElementById('video-fallback-element');
-    this._callbacks = {};
+    this.overlay = document.getElementById('player-controls-overlay');
+    this.backBtn = document.getElementById('player-back-btn');
+    this.titleEl = document.getElementById('player-video-title');
+
+    this.playerControls = null;
+    this.trackMenu = null;
+    this._visible = false;
+    this._useFallback = false;
+    this._currentVideo = null;
+    this._lastRect = null;
+    this._rectTimer = null;
     this._resizeObserver = null;
-    this._fallbackBound = false;
-    this._lastRect = { x: 0, y: 0, width: 0, height: 0 };
-    this._videoReady = false; // Track whether video frames are actually available
+    this._autoHideTimer = null;
+    this._autoHideMs = 2500;
+    this._callbacks = {};
+    this._handlers = [];
+
+    this._initRectReporting();
+    this._initAutoHide();
+    this._initBackButton();
+    this._initRectRequestListener();
   }
 
-  init(callbacks) {
+  init(deps, callbacks = {}) {
+    this.playerControls = deps.playerControls;
+    this.trackMenu = deps.trackMenu;
     this._callbacks = callbacks;
-
-    // Back button
-    const backBtn = document.getElementById('player-back-btn');
-    if (backBtn) {
-      backBtn.addEventListener('click', () => this._callbacks.onBack?.());
-    }
-
-    // Track the video-area's rect via ResizeObserver + scroll listener.
-    this._resizeObserver = new ResizeObserver(Utils.rafThrottle(() => this.reportRect()));
-    this._resizeObserver.observe(this.videoArea);
-
-    // Also report on window resize
-    window.addEventListener('resize', Utils.rafThrottle(() => this.reportRect()));
-
-    // Report initially after layout
-    setTimeout(() => this.reportRect(), 100);
-
-    // Bind HTML5 fallback listeners
-    this._bindFallback();
   }
 
-  _bindFallback() {
-    if (this._fallbackBound || !this.fallbackEl) return;
-    this._fallbackBound = true;
+  // ─── Show / Hide ────────────────────────────────────────────────
+  show(video) {
+    this._currentVideo = video;
+    this._visible = true;
+    this.screen.classList.add('active');
+    this.titleEl.textContent = video.title || 'Untitled';
 
-    // ── BUG FIX: Set playsinline attribute ──
-    // Without playsinline, mobile/iOS WebKit may not render video frames
-    // in inline mode, showing only audio.
-    this.fallbackEl.setAttribute('playsinline', '');
-    this.fallbackEl.setAttribute('webkit-playsinline', '');
-    this.fallbackEl.setAttribute('x-webkit-airplay', 'allow');
+    // Tell the engine to show the child HWND
+    window.novaAPI.send('nova:engine-set-video-visible', true);
 
-    // ── Debug: log when video metadata/data is loaded ──
-    this.fallbackEl.addEventListener('loadedmetadata', () => {
-      console.log('[VideoScreen] loadedmetadata — duration:', this.fallbackEl.duration,
-        'videoWidth:', this.fallbackEl.videoWidth, 'videoHeight:', this.fallbackEl.videoHeight);
-      this._callbacks.onEngineEvent?.({
-        type: 'time',
-        time: 0,
-        duration: this.fallbackEl.duration || 0,
-        position: 0
-      });
+    // Report rect after layout settles
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => this.reportRect());
     });
 
-    // ── BUG FIX: loadeddata confirms video frames are available ──
-    this.fallbackEl.addEventListener('loadeddata', () => {
-      console.log('[VideoScreen] loadeddata — video frames now available',
-        'videoWidth:', this.fallbackEl.videoWidth, 'videoHeight:', this.fallbackEl.videoHeight);
-      this._videoReady = true;
-      // Force a repaint by briefly toggling display — ensures compositor picks up the element
-      this.fallbackEl.style.display = 'none';
-      // Use requestAnimationFrame to ensure the repaint happens
-      requestAnimationFrame(() => {
-        this.fallbackEl.style.display = ''; // Let CSS class control display
-      });
-    });
+    // Show controls initially
+    this._showControls();
 
-    this.fallbackEl.addEventListener('play', () => {
-      console.log('[VideoScreen] HTML5 <video> playing — videoReady:', this._videoReady);
-      this._callbacks.onEngineEvent?.({ type: 'state', state: 'playing' });
-    });
-    this.fallbackEl.addEventListener('pause', () => {
-      this._callbacks.onEngineEvent?.({ type: 'state', state: 'paused' });
-    });
-    this.fallbackEl.addEventListener('ended', () => {
-      this._callbacks.onEngineEvent?.({ type: 'end' });
-    });
-    this.fallbackEl.addEventListener('error', (e) => {
-      console.error('[VideoScreen] HTML5 <video> error:', e.target?.error?.code, e.target?.error?.message);
-      this._videoReady = false;
-      this._callbacks.onEngineEvent?.({ type: 'error', message: 'HTML5 video playback error: ' + (e.target?.error?.message || 'unknown') });
-    });
-    this.fallbackEl.addEventListener('timeupdate', () => {
-      this._callbacks.onEngineEvent?.({
-        type: 'time',
-        time: this.fallbackEl.currentTime,
-        duration: this.fallbackEl.duration || 0,
-        position: this.fallbackEl.duration ? this.fallbackEl.currentTime / this.fallbackEl.duration : 0
-      });
-    });
-
-    // ── BUG FIX: Detect when video frames are being decoded ──
-    // The 'waiting' event fires when playback stalls because the next frame
-    // isn't available yet — helps debug buffering issues
-    this.fallbackEl.addEventListener('waiting', () => {
-      console.warn('[VideoScreen] video waiting for data — buffering');
-    });
-    this.fallbackEl.addEventListener('canplay', () => {
-      console.log('[VideoScreen] canplay — video ready to render');
-    });
+    document.body.classList.add('video-active');
   }
 
-  useFallback(filePath) {
-    // ── Activate the HTML5 <video> element as the playback surface ──
-    // Used ONLY when libVLC is unavailable. Hides the native child HWND
-    // (by reporting a zero rect) so the <video> element is the only
-    // visible video surface.
-    // BUG FIX: Use only the CSS `.active` class to show the video element.
-    // Do NOT set inline width/height/zIndex/position/objectFit because
-    // those are already defined in CSS for `.video-fallback-element.active`
-    // and inline styles can conflict with the CSS `inset: 0` positioning.
+  hide() {
+    this._visible = false;
+    this.screen.classList.remove('active');
 
-    this._videoReady = false;
-    // Native child HWND must be hidden so it doesn't cover the <video>
-    // element. reportRect() returns early if the screen is hidden, so we
-    // call reportVideoRect directly with a zero rect.
-    window.novaAPI.reportVideoRect({ x: 0, y: 0, width: 0, height: 0 });
-    this.fallbackEl.classList.add('active');
+    // Hide the child HWND so it doesn't show stale frames
+    window.novaAPI.send('nova:engine-set-video-visible', false);
 
-    // Encode the file path for the nova-video:// protocol
-    const url = 'nova-video://local/' + Utils.encodeFilePath(filePath);
-    console.log('[VideoScreen] useFallback — src:', url);
+    // Report zero rect so the child HWND gets hidden
+    this._reportRectRaw({ x: 0, y: 0, width: 0, height: 0 });
 
-    this.fallbackEl.src = url;
-    this.fallbackEl.volume = window.state?.settings?.volume || 0.8;
-    this.fallbackEl.playbackRate = window.state?.settings?.playbackRate || 1.0;
+    document.body.classList.remove('video-active');
+  }
 
-    // ── BUG FIX: Do NOT set inline styles that override CSS ──
-    // The CSS `.video-fallback-element.active` already handles:
-    //   display: block, position: absolute, inset: 0, width: 100%, height: 100%,
-    //   object-fit: contain, z-index: 2, background: #000
-    // The only thing we need to ensure is that the video-area background is black.
+  isVisible() { return this._visible; }
 
-    // Hide libVLC video-area (shows black bg behind HTML5 video)
-    this.videoArea.style.background = '#000';
-
-    // ── BUG FIX: Ensure video play actually starts ──
-    this.fallbackEl.play().catch(err => {
-      console.error('[VideoScreen] play() failed:', err.name, err.message);
-      // If autoplay is blocked, the user can still click play
-      // Show the controls so user can manually start playback
-      if (err.name === 'NotAllowedError') {
-        console.warn('[VideoScreen] Autoplay blocked by browser policy — user must click play');
+  // ─── Engine availability ────────────────────────────────────────
+  async checkEngine() {
+    try {
+      const available = await window.novaAPI.invoke('nova:engine-available');
+      this._useFallback = !available;
+      if (this._useFallback) {
+        this.fallbackEl.classList.add('active');
+        console.warn('[video-screen] libVLC unavailable — using HTML5 fallback');
+      } else {
+        this.fallbackEl.classList.remove('active');
+        console.log('[video-screen] libVLC available — using native HWND embedding');
       }
+      return available;
+    } catch (err) {
+      console.error('[video-screen] engine check failed:', err);
+      this._useFallback = true;
+      this.fallbackEl.classList.add('active');
+      return false;
+    }
+  }
+
+  // ─── Load a video ───────────────────────────────────────────────
+  async load(video) {
+    const engineAvailable = await this.checkEngine();
+
+    if (engineAvailable) {
+      const r = await window.novaAPI.invoke('nova:engine-load', video.filePath);
+      if (!r || !r.ok) {
+        console.error('[video-screen] engine-load failed, falling back:', r);
+        this._useFallback = true;
+        this.fallbackEl.classList.add('active');
+        this._loadFallback(video.filePath);
+      }
+    } else {
+      this._loadFallback(video.filePath);
+    }
+
+    // Restore volume from settings
+    if (this.playerControls) {
+      this.playerControls.restoreVolume();
+    }
+  }
+
+  _loadFallback(filePath) {
+    // HTML5 <video> fallback via nova-video:// protocol
+    const url = 'nova-video://local/' + encodeURIComponent(filePath);
+    this.fallbackEl.src = url;
+    this.fallbackEl.load();
+    this.fallbackEl.play().catch(err => {
+      console.warn('[video-screen] fallback autoplay blocked:', err.message);
     });
   }
 
-  /**
-   * Activate libVLC (native child HWND) as the playback surface.
-   * Used when state.engineAvailable is true. Hides the HTML5 <video>
-   * element so the native child HWND behind it is what the user sees,
-   * then reports the video-area rect so the main process sizes the
-   * child HWND to cover it exactly.
-   */
-  useEngine() {
-    // Hide + release any HTML5 <video> surface so it doesn't paint over
-    // the native child HWND.
-    if (this.fallbackEl) {
-      this.fallbackEl.pause?.();
-      this.fallbackEl.removeAttribute('src');
-      try { this.fallbackEl.load?.(); } catch (_) {}
-      this.fallbackEl.classList.remove('active');
+  // ─── Rect reporting — send .video-area rect to main process ─────
+  _initRectReporting() {
+    // ResizeObserver fires when the .video-area changes size (layout, sidebar resize, etc.)
+    if (typeof ResizeObserver !== 'undefined') {
+      this._resizeObserver = new ResizeObserver(() => this.reportRect());
+      this._resizeObserver.observe(this.videoArea);
     }
-    this._videoReady = false;
-    this.videoArea.style.background = '#000';
-    // Report the video-area rect so the child HWND is positioned over it.
-    // Defer one frame so layout (player-active class, etc.) has settled.
-    requestAnimationFrame(() => this.reportRect());
+
+    // Window resize + scroll
+    this._addHandler(window, 'resize', () => this.reportRect());
+
+    // Periodic rect sync (60fps cap) — catches cases where ResizeObserver
+    // doesn't fire (e.g. CSS transitions on the video-area's parent).
+    this._rectTimer = setInterval(() => this.reportRect(), 100);
+
+    // Initial report after a short delay
+    setTimeout(() => this.reportRect(), 200);
   }
 
-  toggleFallback() {
-    if (!this.fallbackEl.classList.contains('active')) return;
-    if (this.fallbackEl.paused) {
-      this.fallbackEl.play().catch(err => console.warn('[VideoScreen] toggle play failed:', err));
-    } else {
-      this.fallbackEl.pause();
-    }
+  _initRectRequestListener() {
+    // Main process asks us to re-report the rect after window events
+    window.novaAPI.on('nova:video-rect-request', () => {
+      this.reportRect();
+    });
   }
 
-  seekFallback(timeSec) {
-    if (!this.fallbackEl.classList.contains('active')) return;
-    this.fallbackEl.currentTime = timeSec;
-  }
-
-  setFallbackVolume(vol) {
-    if (this.fallbackEl) this.fallbackEl.volume = vol;
-  }
-
-  setFallbackRate(rate) {
-    if (this.fallbackEl) this.fallbackEl.playbackRate = rate;
-  }
-
-  stopFallback() {
-    if (this.fallbackEl) {
-      this.fallbackEl.pause();
-      this.fallbackEl.removeAttribute('src');
-      this.fallbackEl.load(); // Fully release the media resource
-      this.fallbackEl.classList.remove('active');
-      this._videoReady = false;
-    }
-  }
-
-  render(state) {
-    // Update the video title at the top of the controls overlay
-    const titleEl = document.getElementById('player-video-title');
-    if (titleEl) {
-      titleEl.textContent = state.currentVideo?.title || 'No video';
-    }
-    // Hide the libVLC video-area if no video is loaded
-    if (!state.currentVideo) {
-      this.videoArea.style.background = '#000';
-    }
-  }
-
-  /**
-   * Report the video-area's rect to the main process so the child HWND
-   * can be positioned. getBoundingClientRect() returns CSS pixels, but
-   * Win32 SetWindowPos expects physical pixels — multiply by
-   * devicePixelRatio so the child HWND covers the video-area exactly
-   * on HiDPI displays.
-   */
   reportRect() {
-    if (!this.videoArea || this.screen.classList.contains('hidden')) {
-      window.novaAPI.reportVideoRect({ x: 0, y: 0, width: 0, height: 0 });
+    if (!this._visible || !this.videoArea || this.screen.classList.contains('active') === false) {
+      this._reportRectRaw({ x: 0, y: 0, width: 0, height: 0 });
       return;
     }
+
     const rect = this.videoArea.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
 
+    // Convert CSS pixels → physical pixels (libVLC child HWND uses physical coords)
     const newRect = {
       x: Math.round(rect.left * dpr),
       y: Math.round(rect.top * dpr),
@@ -267,27 +185,218 @@ class VideoScreen {
       height: Math.round(rect.height * dpr)
     };
 
-    // Avoid spamming IPC if rect hasn't changed
+    // Skip if unchanged
     if (this._rectEquals(newRect, this._lastRect)) return;
     this._lastRect = newRect;
-    window.novaAPI.reportVideoRect(newRect);
+    this._reportRectRaw(newRect);
+  }
+
+  _reportRectRaw(rect) {
+    window.novaAPI.send('nova:video-rect', rect);
   }
 
   _rectEquals(a, b) {
+    if (!a || !b) return false;
     return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
   }
 
-  hide() {
-    this.screen.classList.add('hidden');
-    this.stopFallback();
-    // Shrink the child HWND to zero so video disappears
-    window.novaAPI.reportVideoRect({ x: 0, y: 0, width: 0, height: 0 });
+  // ─── Controls overlay auto-hide ─────────────────────────────────
+  _initAutoHide() {
+    this._addHandler(this.screen, 'mousemove', () => this._showControls());
+    this._addHandler(this.screen, 'mousedown', () => this._showControls());
+    this._addHandler(this.screen, 'touchstart', () => this._showControls(), { passive: true });
+
+    // Pause auto-hide when hovering controls
+    this._addHandler(this.overlay, 'mouseenter', () => this._pauseAutoHide());
+    this._addHandler(this.overlay, 'mouseleave', () => this._showControls());
+
+    // Disable auto-hide when dragging progress/volume
+    document.addEventListener('np:dragging-start', () => this._pauseAutoHide());
+    document.addEventListener('np:dragging-end', () => this._showControls());
   }
 
-  show() {
-    this.screen.classList.remove('hidden');
-    setTimeout(() => this.reportRect(), 50);
+  _showControls() {
+    if (!this._visible) return;
+    this.overlay.classList.add('visible');
+    this._resetAutoHide();
+  }
+
+  _pauseAutoHide() {
+    if (this._autoHideTimer) {
+      clearTimeout(this._autoHideTimer);
+      this._autoHideTimer = null;
+    }
+  }
+
+  _resetAutoHide() {
+    this._pauseAutoHide();
+    this._autoHideTimer = setTimeout(() => {
+      // Only auto-hide if not dragging and track menu closed
+      if (this.trackMenu && this.trackMenu.isVisible()) return;
+      this.overlay.classList.remove('visible');
+    }, this._autoHideMs);
+  }
+
+  setAutoHideMs(ms) {
+    this._autoHideMs = Math.max(500, Math.min(10000, ms));
+    this._resetAutoHide();
+  }
+
+  // ─── Back button ────────────────────────────────────────────────
+  _initBackButton() {
+    this._addHandler(this.backBtn, 'click', () => {
+      this._callbacks.onBack?.();
+    });
+  }
+
+  // ─── Fullscreen ─────────────────────────────────────────────────
+  async toggleFullscreen() {
+    const isFs = await window.novaAPI.invoke('nova:window-is-fullscreen');
+    window.novaAPI.send('nova:window-set-fullscreen', !isFs);
+    // Hide caption buttons when fullscreen
+    await window.novaAPI.invoke('nova:window-set-overlay-chrome', !isFs);
+    // Re-report rect after fullscreen transition
+    setTimeout(() => this.reportRect(), 300);
+  }
+
+  // ─── Engine event subscription ──────────────────────────────────
+  subscribeEngineEvents(onTime, onState, onEnd, onError) {
+    return window.novaAPI.on('nova:engine-event', (event) => {
+      if (!event) return;
+      switch (event.type) {
+        case 'time':
+          onTime?.(event);
+          break;
+        case 'state':
+          onState?.(event);
+          break;
+        case 'end':
+          onEnd?.(event);
+          break;
+        case 'error':
+          onError?.(event);
+          break;
+      }
+    });
+  }
+
+  // ─── HTML5 fallback event subscription ──────────────────────────
+  subscribeFallbackEvents(onTime, onState, onEnd, onError) {
+    if (!this.fallbackEl) return () => {};
+    const handlers = [
+      { ev: 'timeupdate', fn: () => onTime?.({ time: this.fallbackEl.currentTime, duration: this.fallbackEl.duration, position: this.fallbackEl.currentTime / (this.fallbackEl.duration || 1) }) },
+      { ev: 'play', fn: () => onState?.({ state: 'playing' }) },
+      { ev: 'pause', fn: () => onState?.({ state: 'paused' }) },
+      { ev: 'ended', fn: () => onEnd?.({}) },
+      { ev: 'error', fn: () => onError?.({ message: 'HTML5 video error' }) }
+    ];
+    for (const { ev, fn } of handlers) {
+      this.fallbackEl.addEventListener(ev, fn);
+      this._handlers.push({ el: this.fallbackEl, ev, fn });
+    }
+    return () => {
+      for (const { el, ev, fn } of handlers) {
+        el.removeEventListener(ev, fn);
+      }
+    };
+  }
+
+  // ─── Engine control proxies ─────────────────────────────────────
+  async enginePlay() {
+    if (this._useFallback) {
+      try { await this.fallbackEl.play(); return { ok: true }; }
+      catch (e) { return { ok: false, error: e.message }; }
+    }
+    return window.novaAPI.invoke('nova:engine-play');
+  }
+
+  async enginePause() {
+    if (this._useFallback) {
+      this.fallbackEl.pause();
+      return { ok: true };
+    }
+    return window.novaAPI.invoke('nova:engine-pause');
+  }
+
+  async engineToggle() {
+    if (this._useFallback) {
+      if (this.fallbackEl.paused) return this.enginePlay();
+      return this.enginePause();
+    }
+    return window.novaAPI.invoke('nova:engine-toggle');
+  }
+
+  async engineSeek(timeSec) {
+    if (this._useFallback) {
+      this.fallbackEl.currentTime = timeSec;
+      return { ok: true };
+    }
+    return window.novaAPI.invoke('nova:engine-seek', timeSec);
+  }
+
+  async engineSetVolume(vol) {
+    if (this._useFallback) {
+      this.fallbackEl.volume = vol;
+      return { ok: true };
+    }
+    return window.novaAPI.invoke('nova:engine-volume', vol);
+  }
+
+  async engineSetRate(rate) {
+    if (this._useFallback) {
+      this.fallbackEl.playbackRate = rate;
+      return { ok: true };
+    }
+    return window.novaAPI.invoke('nova:engine-rate', rate);
+  }
+
+  async engineSetAudioTrack(id) {
+    if (this._useFallback) return { ok: false, error: 'Not supported in fallback' };
+    return window.novaAPI.invoke('nova:engine-audio-track', id);
+  }
+
+  async engineSetSubtitleTrack(id) {
+    if (this._useFallback) {
+      // Toggle native <track> elements if any
+      return { ok: true };
+    }
+    return window.novaAPI.invoke('nova:engine-subtitle-track', id);
+  }
+
+  async engineSetChapter(ch) {
+    if (this._useFallback) return { ok: false, error: 'Not supported in fallback' };
+    return window.novaAPI.invoke('nova:engine-chapter', ch);
+  }
+
+  async engineGetTracks() {
+    if (this._useFallback) return { audio: [], subtitles: [], chapters: 0, currentChapter: 0 };
+    return window.novaAPI.invoke('nova:engine-tracks');
+  }
+
+  // ─── Cleanup ────────────────────────────────────────────────────
+  _addHandler(el, ev, fn, opts) {
+    el.addEventListener(ev, fn, opts);
+    this._handlers.push({ el, ev, fn });
+  }
+
+  destroy() {
+    for (const { el, ev, fn } of this._handlers) {
+      try { el.removeEventListener(ev, fn); } catch (_) {}
+    }
+    this._handlers = [];
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
+    }
+    if (this._rectTimer) {
+      clearInterval(this._rectTimer);
+      this._rectTimer = null;
+    }
+    if (this._autoHideTimer) {
+      clearTimeout(this._autoHideTimer);
+      this._autoHideTimer = null;
+    }
   }
 }
 
-window.VideoScreen = VideoScreen;
+module.exports = VideoScreen;

@@ -32,6 +32,64 @@ function registerIPCHandlers(mainWindow) {
   ipcMain.on('nova:window-close', () => _mainWindow?.close());
   ipcMain.handle('nova:window-is-maximized', () => !!_mainWindow?.isMaximized());
 
+  // ─── Window: always-on-top (FIX v2 — was missing in v1, dead toggle) ──
+  ipcMain.on('nova:window-always-on-top', (_e, on) => {
+    if (!_mainWindow) return;
+    try {
+      _mainWindow.setAlwaysOnTop(!!on);
+      // Re-assert child HWND topmost — affects z-order relative to other windows
+      const eng = global.videoEngine;
+      if (eng && eng._childHwnd) {
+        try { require('../video-engine/User32').bringToTop(eng._childHwnd); } catch (_) {}
+      }
+    } catch (_) {}
+  });
+
+  // ─── Window: fullscreen ──
+  ipcMain.on('nova:window-set-fullscreen', (_e, on) => {
+    if (!_mainWindow) return;
+    try { _mainWindow.setFullScreen(!!on); } catch (_) {}
+  });
+  ipcMain.handle('nova:window-is-fullscreen', () => !!_mainWindow?.isFullScreen());
+
+  // ─── Window: titlebar overlay (hide caption buttons when in fullscreen overlay) ──
+  ipcMain.handle('nova:window-set-overlay-chrome', (_e, hidden) => {
+    if (!_mainWindow || _mainWindow.isDestroyed()) return { success: false };
+    if (process.platform !== 'win32') return { success: false };
+    try {
+      _mainWindow.setTitleBarOverlay(
+        hidden
+          ? { color: 'rgba(0, 0, 0, 0)', symbolColor: 'rgba(0, 0, 0, 0)', height: 0 }
+          : { color: 'rgba(0, 0, 0, 0)', symbolColor: '#b3b3b3', height: 32 }
+      );
+      return { success: true };
+    } catch (_) { return { success: false }; }
+  });
+
+  // ─── Video engine: show/hide the child HWND ──
+  // Called by the renderer when entering/leaving the video screen —
+  // prevents the "ghost rectangle" of last-frame video.
+  ipcMain.on('nova:engine-set-video-visible', (_e, visible) => {
+    const eng = global.videoEngine;
+    if (eng && typeof eng.setVideoVisible === 'function') {
+      eng.setVideoVisible(!!visible);
+    }
+  });
+
+  // ─── Video engine: rect re-report request ──
+  // Main process asks renderer to re-report the video-area rect after
+  // window events (resize/move/maximize/DPI change). This is one-way.
+  // (The handler is in main.js via webContents.send, but we also accept
+  // a no-op invoke here so the renderer can ping us if needed.)
+  ipcMain.handle('nova:engine-rect-ping', () => {
+    const eng = global.videoEngine;
+    if (eng && typeof eng._updateChildWindowPosition === 'function') {
+      eng._updateChildWindowPosition();
+    }
+    return { ok: true };
+  });
+
+
   // ─── File / folder pickers ──────────────────────────────────────
   ipcMain.handle('nova:pick-folder', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
@@ -283,6 +341,18 @@ function registerIPCHandlers(mainWindow) {
     }
     return { ok: false };
   });
+
+  // ─── Startup file (file association launch) ─────────────────────
+  // Returns the video file path passed on the command line, or null.
+  let _startupFile = null;
+  for (let i = 1; i < process.argv.length; i++) {
+    const arg = process.argv[i];
+    if (!arg.startsWith('-') && /\.(mp4|mkv|avi|mov|webm|flv|wmv|m4v|mpg|mpeg|ts|m2ts|vob|ogv|3gp)$/i.test(arg)) {
+      _startupFile = arg;
+      break;
+    }
+  }
+  ipcMain.handle('nova:get-startup-file', () => _startupFile);
 
   console.log('[ipc] all handlers registered');
 }

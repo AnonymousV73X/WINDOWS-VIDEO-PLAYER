@@ -1,337 +1,442 @@
 /**
- * NovaPlay v2 — Player Controls (full-player overlay)
+ * NovaPlay — PlayerControls (REVOLUTIONIZED v2)
  *
- * Manages:
- *   - The glowing progress bar with hover bubble showing timestamp
- *   - Play/pause, prev, next, volume, speed, shuffle, repeat, fullscreen
- *   - Auto-hide after inactivity (configurable via settings.controlsAutoHideMs)
- *   - Track / subtitle / chapter menu trigger
+ * Wires up the bottom-row controls of the video screen:
+ *   - Progress bar with hover bubble, buffer fill, drag-to-seek
+ *   - Volume button + slider with 3-state icon (mute/low/high)
+ *   - Prev / Play-Pause / Next transport buttons
+ *   - Speed pill (cycles 0.25 → 0.5 → 0.75 → 1 → 1.25 → 1.5 → 2 → 4)
+ *   - Shuffle / Repeat (off → all → one) / Fullscreen
+ *   - Keyboard shortcuts (Space, F, Esc, M, ↑↓, Shift+←→)
  *
- * v2 CHANGES:
- *   - Volume icons now use Material Design filled SVGs (like NovaTune)
- *     instead of stroke-based Lucide icons. This matches the NovaTune
- *     aesthetic where volume icons are filled while all other icons
- *     remain stroke-based.
- *   - Play/pause icons use simple filled polygon/rect SVGs (NovaTune style)
+ * NovaTune-style: progress fill uses var(--green) with a soft glow,
+ * volume bar turns green on hover, transport buttons turn green when active.
  */
 
 class PlayerControls {
   constructor() {
-    this.overlay = document.getElementById('player-controls-overlay');
-    this.progressWrap = document.getElementById('progress-bar-wrap');
-    this.progressFill = document.getElementById('progress-bar-fill');
-    this.progressHandle = document.getElementById('progress-bar-handle');
+    // Progress
+    this.progressBarWrap = document.getElementById('progress-bar-wrap');
+    this.progressBar = document.getElementById('progress-bar');
+    this.progressFill = document.getElementById('progress-fill');
+    this.progressBuffer = document.getElementById('progress-buffer-fill');
+    this.progressHandle = document.getElementById('progress-handle');
     this.progressBubble = document.getElementById('progress-bubble');
-    this.currentTime = document.getElementById('progress-time-current');
-    this.totalTime = document.getElementById('progress-time-total');
-    this.playBtn = document.getElementById('player-play-btn');
-    this.playIcon = document.getElementById('play-icon');
-    this.volumeBtn = document.getElementById('player-volume-btn');
+    this.timeCurrent = document.getElementById('time-current');
+    this.timeTotal = document.getElementById('time-total');
+
+    // Volume
+    this.volumeBtn = document.getElementById('volume-btn');
     this.volumeIcon = document.getElementById('volume-icon');
-    this.volumeWrap = document.getElementById('volume-bar-wrap');
-    this.volumeFill = document.getElementById('volume-bar-fill');
-    this.volumeHandle = document.getElementById('volume-bar-handle');
-    this.speedBtn = document.getElementById('player-speed-btn');
-    this.shuffleBtn = document.getElementById('player-shuffle-btn');
-    this.repeatBtn = document.getElementById('player-repeat-btn');
-    this.fullscreenBtn = document.getElementById('player-fullscreen-btn');
-    this.settingsBtn = document.getElementById('player-settings-btn');
-    this.audioTracksBtn = document.getElementById('player-audio-tracks-btn');
-    this.subtitleBtn = document.getElementById('player-subtitle-tracks-btn');
-    this.chaptersBtn = document.getElementById('player-chapters-btn');
-    this.prevBtn = document.getElementById('player-prev-btn');
-    this.nextBtn = document.getElementById('player-next-btn');
+    this.volumeBarWrap = document.getElementById('volume-bar-wrap');
+    this.volumeFill = document.getElementById('volume-fill');
+    this.volumeHandle = document.getElementById('volume-handle');
 
-    this._timeSec = 0;
-    this._durationSec = 0;
-    this._isDraggingProgress = false;
-    this._isDraggingVolume = false;
-    this._isPlaying = false;
-    this._autoHideTimer = null;
+    // Transport
+    this.prevBtn = document.getElementById('prev-btn');
+    this.playPauseBtn = document.getElementById('play-pause-btn');
+    this.playPauseIcon = document.getElementById('play-pause-icon');
+    this.nextBtn = document.getElementById('next-btn');
+
+    // Right cluster
+    this.speedPill = document.getElementById('speed-pill');
+    this.shuffleBtn = document.getElementById('shuffle-btn');
+    this.repeatBtn = document.getElementById('repeat-btn');
+    this.fullscreenBtn = document.getElementById('fullscreen-btn');
+
+    // Top actions (audio/subtitle/chapter/settings)
+    this.actionAudio = document.getElementById('action-audio-tracks');
+    this.actionSubtitle = document.getElementById('action-subtitle-tracks');
+    this.actionChapter = document.getElementById('action-chapters');
+    this.actionSettings = document.getElementById('action-settings');
+
+    this._videoScreen = null;
     this._callbacks = {};
+    this._handlers = [];
 
-    // Mouse activity detection
-    this._lastMouseMove = Date.now();
+    // State
+    this._isPlaying = false;
+    this._duration = 0;
+    this._currentTime = 0;
+    this._volume = 0.8;
+    this._muted = false;
+    this._rate = 1;
+    this._shuffle = false;
+    this._repeatMode = 'off';   // 'off' | 'all' | 'one'
+    this._draggingProgress = false;
+    this._draggingVolume = false;
+
+    this._speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 4];
+    this._speedIdx = 3;  // default 1x
+
+    this._init();
   }
 
-  init(callbacks) {
+  init(videoScreen, callbacks = {}) {
+    this._videoScreen = videoScreen;
     this._callbacks = callbacks;
-    this._bindEvents();
   }
 
-  _bindEvents() {
-    // Play/pause
-    this.playBtn?.addEventListener('click', () => this._callbacks.onPlayPause?.());
-    this.prevBtn?.addEventListener('click', () => this._callbacks.onPrev?.());
-    this.nextBtn?.addEventListener('click', () => this._callbacks.onNext?.());
-
-    // Progress bar drag + hover bubble
-    if (this.progressWrap) {
-      this.progressWrap.addEventListener('mousedown', (e) => this._onProgressDown(e));
-      this.progressWrap.addEventListener('mousemove', (e) => this._onProgressHover(e));
-      this.progressWrap.addEventListener('mouseleave', () => this._onProgressLeave());
-    }
-
-    // Volume drag
-    if (this.volumeWrap) {
-      this.volumeWrap.addEventListener('mousedown', (e) => this._onVolumeDown(e));
-    }
-    this.volumeBtn?.addEventListener('click', () => this._toggleMute());
-
-    // Speed cycle
-    this.speedBtn?.addEventListener('click', () => this._cycleSpeed());
-
-    // Shuffle / repeat
-    this.shuffleBtn?.addEventListener('click', () => {
-      const enabled = !this.shuffleBtn.classList.contains('active');
-      this.shuffleBtn.classList.toggle('active', enabled);
-      this._callbacks.onShuffle?.(enabled);
-    });
-    this.repeatBtn?.addEventListener('click', () => {
-      const modes = ['off', 'all', 'one'];
-      const cur = this.repeatBtn.dataset.mode || 'off';
-      const next = modes[(modes.indexOf(cur) + 1) % 3];
-      this.repeatBtn.dataset.mode = next;
-      this.repeatBtn.classList.toggle('active', next !== 'off');
-      this._callbacks.onRepeat?.(next);
-    });
-
-    // Fullscreen / settings
-    this.fullscreenBtn?.addEventListener('click', () => this._callbacks.onFullscreen?.());
-    this.settingsBtn?.addEventListener('click', () => this._callbacks.onSettings?.());
-
-    // Track menus
-    this.audioTracksBtn?.addEventListener('click', async () => {
-      const tracks = await window.novaAPI.engineGetTracks();
-      this._callbacks.onTracksMenu?.('audio', tracks.audio || []);
-    });
-    this.subtitleBtn?.addEventListener('click', async () => {
-      const tracks = await window.novaAPI.engineGetTracks();
-      this._callbacks.onTracksMenu?.('subtitles', tracks.subtitles || []);
-    });
-    this.chaptersBtn?.addEventListener('click', async () => {
-      const tracks = await window.novaAPI.engineGetTracks();
-      const chapters = [];
-      for (let i = 0; i < tracks.chapters; i++) chapters.push({ id: i, name: `Chapter ${i+1}`, selected: i === tracks.currentChapter });
-      this._callbacks.onTracksMenu?.('chapters', chapters);
-    });
-
-    // Mouse activity → show controls
-    const videoScreen = document.getElementById('video-screen');
-    if (videoScreen) {
-      videoScreen.addEventListener('mousemove', () => this._onActivity());
-      videoScreen.addEventListener('click', () => this._onActivity());
-    }
+  _init() {
+    this._initProgress();
+    this._initVolume();
+    this._initTransport();
+    this._initSpeed();
+    this._initShuffleRepeat();
+    this._initFullscreen();
+    this._initActions();
+    this._initKeyboard();
   }
 
-  // ─── Auto-hide controls ──────────────────────────────────────────
-  startAutoHide() {
-    this._lastMouseMove = Date.now();
-    this._showControls();
-    this._scheduleHide();
-  }
-
-  stopAutoHide() {
-    if (this._autoHideTimer) {
-      clearTimeout(this._autoHideTimer);
-      this._autoHideTimer = null;
-    }
-  }
-
-  _onActivity() {
-    this._lastMouseMove = Date.now();
-    this._showControls();
-    this._scheduleHide();
-  }
-
-  _scheduleHide() {
-    if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
-    const hideMs = window.state?.settings?.controlsAutoHideMs || 2500;
-    this._autoHideTimer = setTimeout(() => {
-      if (this._isDraggingProgress || this._isDraggingVolume) {
-        this._scheduleHide();
-        return;
-      }
-      const trackMenu = document.getElementById('track-menu');
-      if (trackMenu?.classList.contains('visible')) {
-        this._scheduleHide();
-        return;
-      }
-      this._hideControls();
-    }, hideMs);
-  }
-
-  _showControls() {
-    this.overlay?.classList.add('visible');
-  }
-
-  _hideControls() {
-    this.overlay?.classList.remove('visible');
-  }
-
-  // ─── Time / state updates ────────────────────────────────────────
-  updateTime(timeSec, durationSec) {
-    this._timeSec = timeSec || 0;
-    this._durationSec = durationSec || this._durationSec;
-    if (this._isDraggingProgress) return;
-    const pct = this._durationSec > 0 ? Math.min(100, (this._timeSec / this._durationSec) * 100) : 0;
-    if (this.progressFill) this.progressFill.style.width = pct + '%';
-    if (this.progressHandle) this.progressHandle.style.left = pct + '%';
-    if (this.currentTime) this.currentTime.textContent = Utils.formatTime(this._timeSec);
-    if (this.totalTime) this.totalTime.textContent = Utils.formatTime(this._durationSec);
-  }
-
-  updateState(stateName) {
-    this._isPlaying = (stateName === 'playing');
-    if (this.playIcon) {
-      // NovaTune-style: simple filled polygon/rect SVGs for play/pause
-      this.playIcon.innerHTML = this._isPlaying
-        ? '<rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/>'
-        : '<polygon points="5,3 19,12 5,21" fill="currentColor"/>';
-    }
-  }
-
-  setLoading(isLoading) {
-    if (this.playBtn) {
-      this.playBtn.style.opacity = isLoading ? '0.5' : '1';
-    }
-  }
-
-  showError(message) {
-    console.error('[player] engine error:', message);
-  }
-
-  // ─── Progress bar drag + hover ───────────────────────────────────
-  _onProgressDown(e) {
-    this._isDraggingProgress = true;
-    this._seekFromEvent(e);
-    const moveHandler = (ev) => { if (this._isDraggingProgress) this._seekFromEvent(ev); };
-    const upHandler = () => {
-      this._isDraggingProgress = false;
-      document.removeEventListener('mousemove', moveHandler);
-      document.removeEventListener('mouseup', upHandler);
+  // ═══ Progress bar ═══════════════════════════════════════════════
+  _initProgress() {
+    const onMove = (e) => {
+      const rect = this.progressBar.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const x = clientX - rect.left;
+      const pct = Math.max(0, Math.min(1, x / rect.width));
+      // Update bubble position + time
+      this.progressBubble.style.left = (pct * 100) + '%';
+      this.progressBubble.textContent = this._formatTime(pct * this._duration);
     };
-    document.addEventListener('mousemove', moveHandler);
-    document.addEventListener('mouseup', upHandler);
-  }
 
-  _seekFromEvent(e) {
-    if (!this.progressWrap || !this._durationSec) return;
-    const rect = this.progressWrap.getBoundingClientRect();
-    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-    const pct = x / rect.width;
-    const time = pct * this._durationSec;
-    this._callbacks.onSeek?.(time);
-    this.updateTime(time, this._durationSec);
-  }
-
-  _onProgressHover(e) {
-    if (!this.progressBubble || !this._durationSec) return;
-    const rect = this.progressWrap.getBoundingClientRect();
-    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-    const pct = x / rect.width;
-    const time = pct * this._durationSec;
-    this.progressBubble.textContent = Utils.formatTime(time);
-    this.progressBubble.style.left = (x / rect.width * 100) + '%';
-  }
-
-  _onProgressLeave() {
-    // Bubble hides via CSS
-  }
-
-  // ─── Volume drag ──────────────────────────────────────────────────
-  _onVolumeDown(e) {
-    this._isDraggingVolume = true;
-    this._volumeFromEvent(e);
-    const moveHandler = (ev) => { if (this._isDraggingVolume) this._volumeFromEvent(ev); };
-    const upHandler = () => {
-      this._isDraggingVolume = false;
-      document.removeEventListener('mousemove', moveHandler);
-      document.removeEventListener('mouseup', upHandler);
+    const onDown = (e) => {
+      this._draggingProgress = true;
+      this.progressBarWrap.classList.add('dragging');
+      document.dispatchEvent(new CustomEvent('np:dragging-start'));
+      const rect = this.progressBar.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const x = clientX - rect.left;
+      const pct = Math.max(0, Math.min(1, x / rect.width));
+      this._setProgressUI(pct);
+      onMove(e);
     };
-    document.addEventListener('mousemove', moveHandler);
-    document.addEventListener('mouseup', upHandler);
+
+    const onUp = (e) => {
+      if (!this._draggingProgress) return;
+      this._draggingProgress = false;
+      this.progressBarWrap.classList.remove('dragging');
+      document.dispatchEvent(new CustomEvent('np:dragging-end'));
+      // Seek to the position
+      const rect = this.progressBar.getBoundingClientRect();
+      const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+      const x = clientX - rect.left;
+      const pct = Math.max(0, Math.min(1, x / rect.width));
+      const targetTime = pct * this._duration;
+      this._videoScreen?.engineSeek(targetTime);
+    };
+
+    this._addHandler(this.progressBarWrap, 'mousedown', onDown);
+    this._addHandler(this.progressBarWrap, 'mousemove', onMove);
+    this._addHandler(document, 'mousemove', (e) => { if (this._draggingProgress) onMove(e); });
+    this._addHandler(document, 'mouseup', onUp);
+
+    // Touch
+    this._addHandler(this.progressBarWrap, 'touchstart', onDown, { passive: true });
+    this._addHandler(this.progressBarWrap, 'touchmove', onMove, { passive: true });
+    this._addHandler(document, 'touchend', onUp);
   }
 
-  _volumeFromEvent(e) {
-    if (!this.volumeWrap) return;
-    const rect = this.volumeWrap.getBoundingClientRect();
-    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
-    const vol = x / rect.width;
-    this._setVolumeUI(vol);
-    this._callbacks.onVolume?.(vol);
+  _setProgressUI(pct) {
+    const clamped = Math.max(0, Math.min(1, pct));
+    this.progressFill.style.width = (clamped * 100) + '%';
+    this.progressHandle.style.left = (clamped * 100) + '%';
   }
 
-  _setVolumeUI(vol) {
-    const pct = Math.round(vol * 100);
-    if (this.volumeFill) this.volumeFill.style.width = pct + '%';
-    if (this.volumeHandle) this.volumeHandle.style.left = pct + '%';
-    this._updateVolumeIcon(vol);
+  setTime(time, duration, position) {
+    if (this._draggingProgress) return;  // don't fight the user
+    this._currentTime = time;
+    this._duration = duration || this._duration;
+    const pct = this._duration > 0 ? (time / this._duration) : 0;
+    this._setProgressUI(pct);
+    this.timeCurrent.textContent = this._formatTime(time);
+    this.timeTotal.textContent = this._formatTime(this._duration);
   }
 
-  /**
-   * v2: Volume icons use Material Design filled SVGs (NovaTune style).
-   * All other icons remain stroke-based (Lucide/Feather).
-   * These filled volume SVGs match NovaTune's PlayerControls.js exactly.
-   */
-  _updateVolumeIcon(vol) {
-    if (!this.volumeIcon) return;
-    // Material Design filled volume icons — NovaTune pattern
-    let icon;
-    if (vol <= 0) {
-      // Volume muted — filled SVG with X overlay
-      icon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>';
-    } else if (vol < 0.5) {
-      // Volume medium — filled SVG (speaker + one wave)
-      icon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/></svg>';
+  setBuffered(pct) {
+    if (this.progressBuffer) {
+      this.progressBuffer.style.width = (pct * 100) + '%';
+    }
+  }
+
+  // ═══ Volume ═════════════════════════════════════════════════════
+  _initVolume() {
+    const onMove = (e) => {
+      const rect = this.volumeBarWrap.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const x = clientX - rect.left;
+      const pct = Math.max(0, Math.min(1, x / rect.width));
+      this.setVolume(pct);
+    };
+
+    const onDown = (e) => {
+      this._draggingVolume = true;
+      this.volumeBarWrap.classList.add('dragging');
+      document.dispatchEvent(new CustomEvent('np:dragging-start'));
+      onMove(e);
+    };
+
+    const onUp = () => {
+      if (!this._draggingVolume) return;
+      this._draggingVolume = false;
+      this.volumeBarWrap.classList.remove('dragging');
+      document.dispatchEvent(new CustomEvent('np:dragging-end'));
+      // Persist volume
+      this._callbacks.onVolumeChange?.(this._volume);
+    };
+
+    this._addHandler(this.volumeBarWrap, 'mousedown', onDown);
+    this._addHandler(document, 'mousemove', (e) => { if (this._draggingVolume) onMove(e); });
+    this._addHandler(document, 'mouseup', onUp);
+
+    this._addHandler(this.volumeBarWrap, 'touchstart', onDown, { passive: true });
+    this._addHandler(this.volumeBarWrap, 'touchmove', onMove, { passive: true });
+    this._addHandler(document, 'touchend', onUp);
+
+    // Mute toggle
+    this._addHandler(this.volumeBtn, 'click', () => {
+      this.setMuted(!this._muted);
+    });
+  }
+
+  setVolume(vol) {
+    this._volume = Math.max(0, Math.min(1, vol));
+    this._muted = this._volume === 0;
+    this.volumeFill.style.width = (this._volume * 100) + '%';
+    this.volumeHandle.style.left = (this._volume * 100) + '%';
+    this._updateVolumeIcon();
+    this._videoScreen?.engineSetVolume(this._volume);
+    this._callbacks.onVolumeChange?.(this._volume);
+  }
+
+  setMuted(muted) {
+    this._muted = !!muted;
+    if (this._muted) {
+      this._videoScreen?.engineSetVolume(0);
     } else {
-      // Volume high — filled SVG (speaker + two waves)
-      icon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
+      this._videoScreen?.engineSetVolume(this._volume);
     }
-    this.volumeIcon.innerHTML = icon;
+    this._updateVolumeIcon();
   }
 
-  _toggleMute() {
-    const current = parseFloat(this.volumeFill?.style.width || '80') / 100;
-    const newVol = current > 0 ? 0 : (window.state?.settings?.volume || 0.8);
-    this._setVolumeUI(newVol);
-    this._callbacks.onVolume?.(newVol);
-  }
-
-  adjustVolume(delta) {
-    const current = parseFloat(this.volumeFill?.style.width || '80') / 100;
-    const newVol = Math.max(0, Math.min(1, current + delta));
-    this._setVolumeUI(newVol);
-    this._callbacks.onVolume?.(newVol);
-  }
-
-  // ─── Speed cycle ──────────────────────────────────────────────────
-  _cycleSpeed() {
-    const speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 4];
-    const current = parseFloat(this.speedBtn?.textContent?.replace('×','')) || 1;
-    const idx = speeds.indexOf(current);
-    const next = speeds[(idx + 1) % speeds.length];
-    this.speedBtn.textContent = next + '×';
-    this._callbacks.onRate?.(next);
-  }
-
-  render(state) {
-    // Apply saved volume
-    const vol = state.settings?.volume ?? 0.8;
-    this._setVolumeUI(vol);
-
-    // Apply saved speed
-    const rate = state.settings?.playbackRate ?? 1;
-    if (this.speedBtn) this.speedBtn.textContent = rate + '×';
-
-    // Shuffle/repeat from settings
-    if (this.shuffleBtn) this.shuffleBtn.classList.toggle('active', !!state.settings?.shuffle);
-    if (this.repeatBtn) {
-      const mode = state.settings?.repeatMode || 'off';
-      this.repeatBtn.dataset.mode = mode;
-      this.repeatBtn.classList.toggle('active', mode !== 'off');
+  _updateVolumeIcon() {
+    const v = this._muted ? 0 : this._volume;
+    let svg;
+    if (v === 0) {
+      // Mute
+      svg = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+             <line x1="23" y1="9" x2="17" y2="15"/>
+             <line x1="17" y1="9" x2="23" y2="15"/>`;
+    } else if (v < 0.5) {
+      // Low volume
+      svg = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+             <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>`;
+    } else {
+      // High volume
+      svg = `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+             <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>`;
     }
+    this.volumeIcon.innerHTML = svg;
+  }
+
+  restoreVolume() {
+    // Called when entering the video screen — apply current volume to engine
+    this._videoScreen?.engineSetVolume(this._muted ? 0 : this._volume);
+  }
+
+  getVolume() { return this._volume; }
+  isMuted() { return this._muted; }
+
+  // ═══ Transport ══════════════════════════════════════════════════
+  _initTransport() {
+    this._addHandler(this.playPauseBtn, 'click', () => this._onPlayPause());
+    this._addHandler(this.prevBtn, 'click', () => this._callbacks.onPrev?.());
+    this._addHandler(this.nextBtn, 'click', () => this._callbacks.onNext?.());
+  }
+
+  async _onPlayPause() {
+    await this._videoScreen?.engineToggle();
+  }
+
+  setPlaying(playing) {
+    this._isPlaying = !!playing;
+    if (this._isPlaying) {
+      // Pause icon
+      this.playPauseIcon.innerHTML = `<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>`;
+    } else {
+      // Play icon
+      this.playPauseIcon.innerHTML = `<polygon points="5,3 19,12 5,21"/>`;
+    }
+    // Update now-playing bar play icon too
+    const npPlayIcon = document.getElementById('np-play-icon');
+    if (npPlayIcon) {
+      npPlayIcon.innerHTML = this._isPlaying
+        ? `<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>`
+        : `<polygon points="5,3 19,12 5,21"/>`;
+    }
+  }
+
+  isPlaying() { return this._isPlaying; }
+
+  // ═══ Speed ══════════════════════════════════════════════════════
+  _initSpeed() {
+    this._addHandler(this.speedPill, 'click', () => {
+      this._speedIdx = (this._speedIdx + 1) % this._speeds.length;
+      const rate = this._speeds[this._speedIdx];
+      this._rate = rate;
+      this.speedPill.textContent = (rate === 1 ? '1' : rate) + 'x';
+      this._videoScreen?.engineSetRate(rate);
+      this._callbacks.onRateChange?.(rate);
+    });
+  }
+
+  setRate(rate) {
+    this._rate = rate;
+    const idx = this._speeds.indexOf(rate);
+    if (idx >= 0) this._speedIdx = idx;
+    this.speedPill.textContent = (rate === 1 ? '1' : rate) + 'x';
+  }
+
+  getRate() { return this._rate; }
+
+  // ═══ Shuffle / Repeat ═══════════════════════════════════════════
+  _initShuffleRepeat() {
+    this._addHandler(this.shuffleBtn, 'click', () => {
+      this._shuffle = !this._shuffle;
+      this.shuffleBtn.classList.toggle('active', this._shuffle);
+      this._callbacks.onShuffleChange?.(this._shuffle);
+    });
+
+    this._addHandler(this.repeatBtn, 'click', () => {
+      const order = ['off', 'all', 'one'];
+      const idx = order.indexOf(this._repeatMode);
+      this._repeatMode = order[(idx + 1) % order.length];
+      this.repeatBtn.classList.toggle('active', this._repeatMode !== 'off');
+      this._updateRepeatIcon();
+      this._callbacks.onRepeatChange?.(this._repeatMode);
+    });
+  }
+
+  _updateRepeatIcon() {
+    if (this._repeatMode === 'one') {
+      // Repeat-1 icon (with "1" text)
+      this.repeatBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="17 1 21 5 17 9"/>
+          <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+          <polyline points="7 23 3 19 7 15"/>
+          <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+          <text x="12" y="15" text-anchor="middle" font-size="8" font-weight="bold" fill="currentColor" stroke="none">1</text>
+        </svg>`;
+    } else {
+      // Repeat icon
+      this.repeatBtn.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="17 1 21 5 17 9"/>
+          <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+          <polyline points="7 23 3 19 7 15"/>
+          <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+        </svg>`;
+    }
+  }
+
+  isShuffle() { return this._shuffle; }
+  getRepeatMode() { return this._repeatMode; }
+
+  // ═══ Fullscreen ═════════════════════════════════════════════════
+  _initFullscreen() {
+    this._addHandler(this.fullscreenBtn, 'click', () => {
+      this._videoScreen?.toggleFullscreen();
+    });
+  }
+
+  // ═══ Action buttons (top-right) ═════════════════════════════════
+  _initActions() {
+    this._addHandler(this.actionAudio, 'click', () => this._callbacks.onShowTrackMenu?.('audio'));
+    this._addHandler(this.actionSubtitle, 'click', () => this._callbacks.onShowTrackMenu?.('subtitles'));
+    this._addHandler(this.actionChapter, 'click', () => this._callbacks.onShowTrackMenu?.('chapters'));
+    this._addHandler(this.actionSettings, 'click', () => this._callbacks.onShowSettings?.());
+  }
+
+  // ═══ Keyboard shortcuts ═════════════════════════════════════════
+  _initKeyboard() {
+    this._addHandler(document, 'keydown', (e) => {
+      // Only handle when video screen is active
+      if (!this._videoScreen?.isVisible()) return;
+      // Don't interfere with input fields
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+      switch (e.key) {
+        case ' ':
+          e.preventDefault();
+          this._onPlayPause();
+          break;
+        case 'f':
+        case 'F':
+          e.preventDefault();
+          this._videoScreen?.toggleFullscreen();
+          break;
+        case 'Escape':
+          // Let the app handle Esc for fullscreen exit / back nav
+          break;
+        case 'm':
+        case 'M':
+          e.preventDefault();
+          this.setMuted(!this._muted);
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          this.setVolume(Math.min(1, this._volume + 0.05));
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          this.setVolume(Math.max(0, this._volume - 0.05));
+          break;
+        case 'ArrowLeft':
+          if (e.shiftKey) {
+            e.preventDefault();
+            this._callbacks.onPrev?.();
+          } else {
+            e.preventDefault();
+            this._videoScreen?.engineSeek(Math.max(0, this._currentTime - 5));
+          }
+          break;
+        case 'ArrowRight':
+          if (e.shiftKey) {
+            e.preventDefault();
+            this._callbacks.onNext?.();
+          } else {
+            e.preventDefault();
+            this._videoScreen?.engineSeek(Math.min(this._duration, this._currentTime + 5));
+          }
+          break;
+      }
+    });
+  }
+
+  // ═══ Helpers ════════════════════════════════════════════════════
+  _formatTime(sec) {
+    if (!sec || !isFinite(sec) || sec < 0) return '0:00';
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = Math.floor(sec % 60);
+    if (h > 0) {
+      return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+    return m + ':' + String(s).padStart(2, '0');
+  }
+
+  _addHandler(el, ev, fn, opts) {
+    el.addEventListener(ev, fn, opts);
+    this._handlers.push({ el, ev, fn });
+  }
+
+  destroy() {
+    for (const { el, ev, fn } of this._handlers) {
+      try { el.removeEventListener(ev, fn); } catch (_) {}
+    }
+    this._handlers = [];
   }
 }
 
-window.PlayerControls = PlayerControls;
+module.exports = PlayerControls;
