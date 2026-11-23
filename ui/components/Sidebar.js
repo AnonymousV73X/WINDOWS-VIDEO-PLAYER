@@ -226,4 +226,8 @@ class Sidebar {
   }
 }
 
-module.exports = Sidebar;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = Sidebar;
+} else {
+  window.Sidebar = Sidebar;
+}

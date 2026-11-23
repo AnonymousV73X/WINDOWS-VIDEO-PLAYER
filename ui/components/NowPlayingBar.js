@@ -77,9 +77,9 @@ class NowPlayingBar {
   setPlaying(playing) {
     this._isPlaying = !!playing;
     if (this._isPlaying) {
-      this.playIcon.innerHTML = `<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>`;
+      this.playIcon.innerHTML = `<rect x="6" y="4" width="4" height="16" rx="1.5"/><rect x="14" y="4" width="4" height="16" rx="1.5"/>`;
     } else {
-      this.playIcon.innerHTML = `<polygon points="5,3 19,12 5,21"/>`;
+      this.playIcon.innerHTML = `<path d="M6 4l12 8-12 8V4z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
     }
   }
 
@@ -161,4 +161,8 @@ class NowPlayingBar {
   }
 }
 
-module.exports = NowPlayingBar;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = NowPlayingBar;
+} else {
+  window.NowPlayingBar = NowPlayingBar;
+}

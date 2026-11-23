@@ -253,7 +253,18 @@ function registerIPCHandlers(mainWindow) {
   ipcMain.handle('nova:playlist-remove', (event, { playlistId, videoId }) => db.removeFromPlaylist(playlistId, videoId));
 
   // ─── Settings ──────────────────────────────────────────────────
-  ipcMain.handle('nova:settings-get', () => settings.readAll());
+  ipcMain.handle('nova:settings-get', async () => {
+    const s = await settings.readAll();
+    // Prune scan folders that no longer exist on disk
+    if (Array.isArray(s.scanFolders)) {
+      const existing = s.scanFolders.filter(f => fs.existsSync(f));
+      if (existing.length !== s.scanFolders.length) {
+        s.scanFolders = existing;
+        await settings.set('scanFolders', existing);
+      }
+    }
+    return s;
+  });
   ipcMain.handle('nova:settings-set', (event, { key, value }) => settings.set(key, value));
   ipcMain.handle('nova:settings-reset', () => settings.reset());
 
@@ -266,8 +277,12 @@ function registerIPCHandlers(mainWindow) {
   ipcMain.handle('nova:engine-load', async (event, filePath) => {
     const eng = global.videoEngine;
     if (!eng) return { ok: false, error: 'Engine not initialised' };
-    const r = eng.load(filePath);
-    return r;
+    try {
+      return eng.load(filePath);
+    } catch (err) {
+      console.error('[ipc] eng.load threw:', err.message);
+      return { ok: false, error: err.message };
+    }
   });
   ipcMain.handle('nova:engine-play', () => {
     const eng = global.videoEngine;

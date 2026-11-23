@@ -14,14 +14,15 @@
  * hole (transparent) where the libVLC child HWND shows through.
  */
 
-// ─── Component imports ────────────────────────────────────────────
-const Sidebar = require('./components/Sidebar');
-const LibraryView = require('./components/LibraryView');
-const VideoScreen = require('./components/VideoScreen');
-const PlayerControls = require('./components/PlayerControls');
-const TrackMenu = require('./components/TrackMenu');
-const SettingsPanel = require('./components/SettingsPanel');
-const NowPlayingBar = require('./components/NowPlayingBar');
+// ─── Component resolution ─────────────────────────────────────────
+// Components are loaded via <script> tags and attached to window (or require if bundled)
+const _Sidebar = typeof Sidebar !== 'undefined' ? Sidebar : require('./components/Sidebar');
+const _LibraryView = typeof LibraryView !== 'undefined' ? LibraryView : require('./components/LibraryView');
+const _VideoScreen = typeof VideoScreen !== 'undefined' ? VideoScreen : require('./components/VideoScreen');
+const _PlayerControls = typeof PlayerControls !== 'undefined' ? PlayerControls : require('./components/PlayerControls');
+const _TrackMenu = typeof TrackMenu !== 'undefined' ? TrackMenu : require('./components/TrackMenu');
+const _SettingsPanel = typeof SettingsPanel !== 'undefined' ? SettingsPanel : require('./components/SettingsPanel');
+const _NowPlayingBar = typeof NowPlayingBar !== 'undefined' ? NowPlayingBar : require('./components/NowPlayingBar');
 
 // ─── State ────────────────────────────────────────────────────────
 const state = {
@@ -46,93 +47,101 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log('[boot] NovaPlay initializing…');
   updateSplashStatus('loading', 'Initializing…');
 
-  // 1. Instantiate components
-  sidebar = new Sidebar();
-  libraryView = new LibraryView();
-  videoScreen = new VideoScreen();
-  playerControls = new PlayerControls();
-  trackMenu = new TrackMenu();
-  settingsPanel = new SettingsPanel();
-  nowPlayingBar = new NowPlayingBar();
+  try {
+    // 1. Instantiate components
+    sidebar = new _Sidebar();
+    libraryView = new _LibraryView();
+    videoScreen = new _VideoScreen();
+    playerControls = new _PlayerControls();
+    trackMenu = new _TrackMenu();
+    settingsPanel = new _SettingsPanel();
+    nowPlayingBar = new _NowPlayingBar();
 
-  // 2. Wire components together
-  videoScreen.init({ playerControls, trackMenu }, {
-    onBack: handleBackToLibrary
-  });
-  playerControls.init(videoScreen, {
-    onPrev: handlePrev,
-    onNext: handleNext,
-    onShuffleChange: (on) => { state.shuffle = on; nowPlayingBar.setShuffle(on); },
-    onRepeatChange: (mode) => { state.repeatMode = mode; nowPlayingBar.setRepeat(mode); },
-    onVolumeChange: (vol) => { /* persisted by settings */ },
-    onRateChange: (rate) => { /* persisted by settings */ },
-    onShowTrackMenu: (type) => trackMenu.show(type),
-    onShowSettings: () => { /* could open settings overlay */ }
-  });
-  trackMenu.init({});
-  sidebar.init({
-    onNavigate: handleNavigate,
-    onAddFolder: handleAddFolder,
-    onRemoveFolder: handleRemoveFolder,
-    onFolderClick: (folder) => { /* could filter library by folder */ },
-    onCreatePlaylist: handleCreatePlaylist,
-    onPlaylistClick: (id) => { /* open playlist detail */ },
-    onDeletePlaylist: handleDeletePlaylist,
-    onResize: (w) => { /* persist sidebar width */ }
-  });
-  libraryView.init({
-    onPlayVideo: handlePlayVideo,
-    onAddFolder: handleAddFolder,
-    onCancelScan: handleCancelScan,
-    onContextMenu: handleContextMenu
-  });
-  settingsPanel.init({
-    onSortChange: (order, dir) => { reloadLibrary(); },
-    onAutoHideChange: (ms) => { videoScreen.setAutoHideMs(ms); }
-  });
-  nowPlayingBar.init({
-    onPlayPause: () => playerControls._onPlayPause(),
-    onPrev: handlePrev,
-    onNext: handleNext,
-    onShuffle: () => { playerControls.shuffleBtn.click(); },
-    onRepeat: () => { playerControls.repeatBtn.click(); },
-    onExpand: () => videoScreen.show(state.currentVideo),
-    onSeek: (time) => videoScreen.engineSeek(time)
-  });
+    // 2. Wire components together
+    videoScreen.init({ playerControls, trackMenu }, {
+      onBack: handleBackToLibrary
+    });
+    playerControls.init(videoScreen, {
+      onPrev: handlePrev,
+      onNext: handleNext,
+      onShuffleChange: (on) => { state.shuffle = on; nowPlayingBar.setShuffle(on); },
+      onRepeatChange: (mode) => { state.repeatMode = mode; nowPlayingBar.setRepeat(mode); },
+      onVolumeChange: (vol) => { /* persisted by settings */ },
+      onRateChange: (rate) => { /* persisted by settings */ },
+      onShowTrackMenu: (type) => trackMenu.show(type),
+      onShowSettings: () => { /* could open settings overlay */ }
+    });
+    trackMenu.init({});
+    sidebar.init({
+      onNavigate: handleNavigate,
+      onAddFolder: handleAddFolder,
+      onRemoveFolder: handleRemoveFolder,
+      onFolderClick: (folder) => { /* could filter library by folder */ },
+      onCreatePlaylist: handleCreatePlaylist,
+      onPlaylistClick: (id) => { /* open playlist detail */ },
+      onDeletePlaylist: handleDeletePlaylist,
+      onResize: (w) => { /* persist sidebar width */ }
+    });
+    libraryView.init({
+      onPlayVideo: handlePlayVideo,
+      onAddFolder: handleAddFolder,
+      onCancelScan: handleCancelScan,
+      onContextMenu: handleContextMenu
+    });
+    settingsPanel.init({
+      onSortChange: (order, dir) => { reloadLibrary(); },
+      onAutoHideChange: (ms) => { videoScreen.setAutoHideMs(ms); }
+    });
+    nowPlayingBar.init({
+      onPlayPause: () => playerControls._onPlayPause(),
+      onPrev: handlePrev,
+      onNext: handleNext,
+      onShuffle: () => { playerControls.shuffleBtn.click(); },
+      onRepeat: () => { playerControls.repeatBtn.click(); },
+      onExpand: () => videoScreen.show(state.currentVideo),
+      onSeek: (time) => videoScreen.engineSeek(time)
+    });
 
-  // 3. Titlebar wiring
-  initTitlebar();
+    // 3. Titlebar wiring
+    initTitlebar();
 
-  // 4. Load settings (parallel with library)
-  updateSplashStatus('loading', 'Loading settings…');
-  await loadSettings();
-  applySettings();
+    // Tooltip portal & sort controls
+    initTooltipPortal();
+    initSortControls();
 
-  // 5. Check engine availability
-  updateSplashStatus('loading', 'Checking video engine…');
-  state.engineAvailable = await videoScreen.checkEngine();
+    // 4. Load settings (parallel with library)
+    updateSplashStatus('loading', 'Loading settings…');
+    await loadSettings();
+    applySettings();
 
-  // 6. Load library
-  updateSplashStatus('loading', 'Loading library…');
-  await reloadLibrary();
+    // 5. Check engine availability
+    updateSplashStatus('loading', 'Checking video engine…');
+    state.engineAvailable = await videoScreen.checkEngine();
 
-  // 7. Load folders + playlists
-  await loadFolders();
-  await loadPlaylists();
+    // 6. Load library
+    updateSplashStatus('loading', 'Loading library…');
+    await reloadLibrary();
 
-  // 8. Wire engine events
-  wireEngineEvents();
+    // 7. Load folders + playlists
+    await loadFolders();
+    await loadPlaylists();
 
-  // 9. Auto-rescan if enabled
-  if (state.settings.autoRescan && state.settings.scanFolders.length > 0) {
-    setTimeout(() => autoRescan(), 500);
+    // 8. Wire engine events
+    wireEngineEvents();
+
+    // 9. Auto-rescan if enabled
+    if (state.settings && state.settings.autoRescan && state.settings.scanFolders?.length > 0) {
+      setTimeout(() => autoRescan(), 500);
+    }
+
+    // 10. Handle file association (if app was launched with a video file)
+    handleStartupFile();
+  } catch (err) {
+    console.error('[boot] Error during initialization:', err);
+  } finally {
+    // 11. Always hide splash screen
+    setTimeout(() => hideSplash(), 300);
   }
-
-  // 10. Handle file association (if app was launched with a video file)
-  handleStartupFile();
-
-  // 11. Hide splash
-  setTimeout(() => hideSplash(), 300);
 
   console.log('[boot] NovaPlay ready');
 });
@@ -281,6 +290,9 @@ function wireEngineEvents() {
 async function handlePlayVideo(video) {
   state.currentVideo = video;
 
+  // Save scroll position so we can restore it on back
+  libraryView.saveScrollPosition();
+
   // Build a queue from the current filtered library
   const filtered = libraryView._filtered || state.videos;
   state.queue = filtered.slice();
@@ -292,7 +304,7 @@ async function handlePlayVideo(video) {
 
   // Show video screen
   videoScreen.show(video);
-  nowPlayingBar.show(video);
+  nowPlayingBar.hide();
 
   // Load into engine
   await videoScreen.load(video);
@@ -311,7 +323,7 @@ async function handlePrev() {
   if (next) {
     state.currentVideo = next;
     videoScreen.show(next);
-    nowPlayingBar.show(next);
+    nowPlayingBar.hide();
     await videoScreen.load(next);
     await videoScreen.enginePlay();
   }
@@ -334,7 +346,7 @@ async function handleNext() {
   if (next) {
     state.currentVideo = next;
     videoScreen.show(next);
-    nowPlayingBar.show(next);
+    nowPlayingBar.hide();
     await videoScreen.load(next);
     await videoScreen.enginePlay();
   }
@@ -354,7 +366,14 @@ function handleBackToLibrary() {
   // Pause playback when leaving video screen
   if (state.isPlaying) {
     videoScreen.enginePause();
+    state.isPlaying = false;
   }
+  // Re-show the mini now-playing bar if there's a loaded video
+  if (state.currentVideo) {
+    nowPlayingBar.show(state.currentVideo);
+  }
+  // Scroll back to the card the user clicked
+  libraryView.restoreScrollPosition(state.currentVideo?.id);
 }
 
 // ═══ Navigation ══════════════════════════════════════════════════
@@ -696,6 +715,142 @@ function showConfirmDialog(title, body) {
 function escapeHtml(s) {
   if (s == null) return '';
   return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+// ═══ Tooltip Portal System ══════════════════════════════════════
+let _tooltipPortalEl = null;
+
+function initTooltipPortal() {
+  let currentTarget = null;
+  let autoDismissTimer = null;
+
+  function clearDismissTimer() {
+    if (autoDismissTimer) {
+      clearTimeout(autoDismissTimer);
+      autoDismissTimer = null;
+    }
+  }
+
+  function showTooltip(target) {
+    clearDismissTimer();
+    const text = target.getAttribute('data-tooltip');
+    if (!text) return;
+    currentTarget = target;
+
+    if (!_tooltipPortalEl) {
+      _tooltipPortalEl = document.createElement('div');
+      _tooltipPortalEl.className = 'portal-tooltip';
+      document.body.appendChild(_tooltipPortalEl);
+    }
+
+    _tooltipPortalEl.textContent = text;
+    _tooltipPortalEl.style.left = '0px';
+    _tooltipPortalEl.style.top = '0px';
+    _tooltipPortalEl.classList.add('visible');
+
+    const rect = target.getBoundingClientRect();
+    const tw = _tooltipPortalEl.offsetWidth;
+    const th = _tooltipPortalEl.offsetHeight;
+
+    let left = rect.left + rect.width / 2 - tw / 2;
+    left = Math.max(6, Math.min(left, window.innerWidth - tw - 6));
+
+    let top = rect.top - th - 8;
+    if (top < 6) top = rect.bottom + 8;
+    top = Math.max(6, Math.min(top, window.innerHeight - th - 6));
+
+    _tooltipPortalEl.style.left = `${left}px`;
+    _tooltipPortalEl.style.top = `${top}px`;
+
+    // Auto-dismiss after 3s of continuous hover
+    autoDismissTimer = setTimeout(() => {
+      if (_tooltipPortalEl) _tooltipPortalEl.classList.remove('visible');
+    }, 3000);
+  }
+
+  function hideTooltip() {
+    clearDismissTimer();
+    currentTarget = null;
+    if (_tooltipPortalEl) _tooltipPortalEl.classList.remove('visible');
+  }
+
+  document.addEventListener('mouseover', (e) => {
+    // Intercept native title attribute before browser displays OS tooltip
+    const titleEl = e.target.closest?.('[title]');
+    if (titleEl && !(titleEl instanceof SVGElement)) {
+      const titleVal = titleEl.getAttribute('title');
+      if (titleVal && (!titleEl.hasAttribute('data-tooltip') || titleEl.dataset.tipFromTitle)) {
+        titleEl.setAttribute('data-tooltip', titleVal);
+        titleEl.dataset.tipFromTitle = '1';
+      }
+      titleEl.removeAttribute('title');
+    }
+
+    const tipTarget = e.target.closest?.('[data-tooltip]');
+    if (tipTarget) {
+      showTooltip(tipTarget);
+    } else if (currentTarget) {
+      hideTooltip();
+    }
+  }, true);
+
+  document.addEventListener('mouseout', (e) => {
+    if (currentTarget && !currentTarget.contains(e.relatedTarget)) {
+      hideTooltip();
+    }
+  }, true);
+
+  document.addEventListener('mousedown', hideTooltip, true);
+  window.addEventListener('scroll', hideTooltip, true);
+  window.addEventListener('blur', hideTooltip);
+}
+
+// ═══ Sort Controls ═══════════════════════════════════════════════
+function initSortControls() {
+  const dropdown = document.getElementById('sort-dropdown');
+  const trigger = document.getElementById('sort-trigger');
+  const labelText = document.getElementById('sort-label-text');
+  const dirBtn = document.getElementById('sort-direction-btn');
+  const menu = document.getElementById('sort-menu');
+
+  if (!dropdown || !trigger || !dirBtn) return;
+
+  // Toggle dropdown menu
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle('open');
+  });
+
+  document.addEventListener('click', () => {
+    dropdown.classList.remove('open');
+  });
+
+  // Handle sort field selection
+  menu?.addEventListener('click', async (e) => {
+    const item = e.target.closest?.('.dropdown-item');
+    if (!item) return;
+    const sortField = item.dataset.sort;
+    if (labelText) {
+      labelText.textContent = item.childNodes[0].textContent.trim();
+    }
+    dropdown.classList.remove('open');
+    if (state.settings) {
+      state.settings.sortOrder = sortField;
+      await window.novaAPI.invoke('nova:settings-set', { sortOrder: sortField });
+      reloadLibrary();
+    }
+  });
+
+  // Handle direction toggle (asc / desc)
+  dirBtn.addEventListener('click', async () => {
+    const isAsc = dirBtn.classList.toggle('asc');
+    const newDir = isAsc ? 'asc' : 'desc';
+    if (state.settings) {
+      state.settings.sortDirection = newDir;
+      await window.novaAPI.invoke('nova:settings-set', { sortDirection: newDir });
+      reloadLibrary();
+    }
+  });
 }
 
 // Expose for debugging

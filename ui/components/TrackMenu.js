@@ -227,4 +227,8 @@ class TrackMenu {
   }
 }
 
-module.exports = TrackMenu;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = TrackMenu;
+} else {
+  window.TrackMenu = TrackMenu;
+}

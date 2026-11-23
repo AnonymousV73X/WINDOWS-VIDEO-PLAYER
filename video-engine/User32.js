@@ -37,19 +37,21 @@ function load() {
 
   _decls = {
     // Window creation / destruction
-    CreateWindowExW: _user32.func('void * CreateWindowExW(uint32 dwExStyle, const char16_t *lpClassName, const char16_t *lpWindowName, uint32 dwStyle, int32 x, int32 y, int32 nWidth, int32 nHeight, void *hWndParent, void *hMenu, void *hInstance, void *lpParam)'),
-    DestroyWindow:    _user32.func('int32 DestroyWindow(void *hWnd)'),
-    MoveWindow:       _user32.func('int32 MoveWindow(void *hWnd, int32 x, int32 y, int32 nWidth, int32 nHeight, int32 bRepaint)'),
-    ShowWindow:       _user32.func('int32 ShowWindow(void *hWnd, int32 nCmdShow)'),
-    SetWindowPos:     _user32.func('int32 SetWindowPos(void *hWnd, void *hWndInsertAfter, int32 x, int32 y, int32 cx, int32 cy, uint32 uFlags)'),
-    SetParent:        _user32.func('void * SetParent(void *hWndChild, void *hWndNewParent)'),
-    GetParent:        _user32.func('void * GetParent(void *hWnd)'),
-    InvalidateRect:   _user32.func('int32 InvalidateRect(void *hWnd, void *lpRect, int32 bErase)'),
-    UpdateWindow:     _user32.func('int32 UpdateWindow(void *hWnd)'),
-    SetWindowLongPtrW:_user32.func('long SetWindowLongPtrW(void *hWnd, int32 nIndex, long value)'),
-    GetWindowLongPtrW:_user32.func('long GetWindowLongPtrW(void *hWnd, int32 nIndex)'),
-    SetForegroundWindow: _user32.func('int32 SetForegroundWindow(void *hWnd)'),
-    IsWindowVisible:  _user32.func('int32 IsWindowVisible(void *hWnd)'),
+    // NOTE: HWNDs are declared as uint64 so koffi passes the numeric pointer
+    // VALUE (BigInt) rather than a pointer-to-buffer — the v2 Buffer→void* bug.
+    CreateWindowExW: _user32.func('uint64 CreateWindowExW(uint32 dwExStyle, const char16_t *lpClassName, const char16_t *lpWindowName, uint32 dwStyle, int32 x, int32 y, int32 nWidth, int32 nHeight, uint64 hWndParent, uint64 hMenu, uint64 hInstance, uint64 lpParam)'),
+    DestroyWindow:    _user32.func('int32 DestroyWindow(uint64 hWnd)'),
+    MoveWindow:       _user32.func('int32 MoveWindow(uint64 hWnd, int32 x, int32 y, int32 nWidth, int32 nHeight, int32 bRepaint)'),
+    ShowWindow:       _user32.func('int32 ShowWindow(uint64 hWnd, int32 nCmdShow)'),
+    SetWindowPos:     _user32.func('int32 SetWindowPos(uint64 hWnd, uint64 hWndInsertAfter, int32 x, int32 y, int32 cx, int32 cy, uint32 uFlags)'),
+    SetParent:        _user32.func('uint64 SetParent(uint64 hWndChild, uint64 hWndNewParent)'),
+    GetParent:        _user32.func('uint64 GetParent(uint64 hWnd)'),
+    InvalidateRect:   _user32.func('int32 InvalidateRect(uint64 hWnd, void *lpRect, int32 bErase)'),
+    UpdateWindow:     _user32.func('int32 UpdateWindow(uint64 hWnd)'),
+    SetWindowLongPtrW:_user32.func('long SetWindowLongPtrW(uint64 hWnd, int32 nIndex, long value)'),
+    GetWindowLongPtrW:_user32.func('long GetWindowLongPtrW(uint64 hWnd, int32 nIndex)'),
+    SetForegroundWindow: _user32.func('int32 SetForegroundWindow(uint64 hWnd)'),
+    IsWindowVisible:  _user32.func('int32 IsWindowVisible(uint64 hWnd)'),
 
     // Window style constants — https://learn.microsoft.com/en-us/windows/win32/winmsg/window-styles
     WS_CHILD:         0x40000000,
@@ -108,14 +110,21 @@ function load() {
  * If for any reason koffi rejects the Buffer, we fall back to constructing
  * a pointer via koffi.as() with the BigInt value.
  */
+/**
+ * Extract the HWND numeric value from an Electron getNativeWindowHandle() Buffer.
+ * Returns a BigInt — passed to uint64 koffi params which accept BigInt directly.
+ */
 function hwndBufferToPointer(buf) {
-  if (!buf) return null;
+  if (!buf) return 0n;
   if (Buffer.isBuffer(buf)) {
-    // Preferred path: pass the Buffer directly. koffi marshals it as void *.
-    return buf;
+    // Electron returns the HWND as raw little-endian bytes (8 on x64, 4 on x86).
+    return buf.length >= 8
+      ? buf.readBigUInt64LE(0)
+      : BigInt(buf.readUInt32LE(0));
   }
-  // Already a pointer/number — return as-is.
-  return buf;
+  // Already a BigInt or number.
+  if (typeof buf === 'bigint') return buf;
+  return BigInt(buf);
 }
 
 /**
@@ -135,97 +144,75 @@ function hwndBufferToPointer(buf) {
 function createChildWindow(parentHwndBuf) {
   const u = load();
 
-  // Pass the raw Buffer — koffi knows how to marshal Buffer→void*.
-  // This is the FIX for v1's BigInt→void* silent-NULL bug.
-  const parentPtr = hwndBufferToPointer(parentHwndBuf);
-  if (!parentPtr) throw new Error('createChildWindow: parent HWND is null');
+  // Extract the parent HWND as a BigInt — passed to uint64 koffi param.
+  const parentVal = hwndBufferToPointer(parentHwndBuf);
+  if (!parentVal) throw new Error('createChildWindow: parent HWND is null');
 
-  // WS_POPUP gives us a borderless top-level-style window we can parent
-  // and control z-order on. WS_EX_NOACTIVATE prevents focus stealing.
-  // We DO NOT use WS_CLIPSIBLINGS — that's what made v1's child invisible
-  // behind Chromium's GPU compositor surface.
   const style = u.WS_POPUP | u.WS_VISIBLE;
   const exStyle = u.WS_EX_NOACTIVATE;
 
   console.log('[user32] CreateWindowExW: style=0x' + style.toString(16) +
               ' exStyle=0x' + exStyle.toString(16));
 
+  // CreateWindowExW returns uint64 (the child HWND as a BigInt).
   const hwnd = u.CreateWindowExW(
     exStyle,
-    'Static',           // built-in Win32 static control — safe, no WNDPROC needed
+    'Static',
     'NovaPlayVideo',
     style,
-    0, 0, 10, 10,       // initial size; repositioned by syncPosition()
-    parentPtr,          // ← raw Buffer, koffi marshals to void *
-    null, null, null
+    0, 0, 10, 10,
+    parentVal,   // ← BigInt → uint64, koffi passes the value directly
+    0n, 0n, 0n
   );
 
-  if (!hwnd) {
-    throw new Error('CreateWindowExW returned NULL (style=0x' + style.toString(16) + ')');
+  if (!hwnd || hwnd === 0n) {
+    throw new Error('CreateWindowExW returned NULL');
   }
 
-  console.log('[user32] child HWND created:', hwnd);
+  console.log('[user32] child HWND created: 0x' + hwnd.toString(16));
 
-  // Explicitly SetParent — guarantees parentage even if CreateWindowExW
-  // silently dropped the parent (defensive; should be a no-op if it worked).
+  // SetParent — reparent the WS_POPUP window to the BrowserWindow.
   try {
-    const previousParent = u.SetParent(hwnd, parentPtr);
-    if (previousParent === null || previousParent === 0) {
-      // SetParent returned NULL — could mean child was previously top-level,
-      // which is exactly the v1 bug we're fixing. Now it's parented.
-      console.log('[user32] SetParent: child was previously top-level (v1 bug!) — now reparented');
-    }
+    const prev = u.SetParent(hwnd, parentVal);
+    console.log('[user32] SetParent result: 0x' + prev.toString(16));
   } catch (err) {
     console.warn('[user32] SetParent failed (non-fatal):', err.message);
   }
 
-  // Verify parentage — if GetParent != expected, something is wrong.
+  // Verify parentage.
   try {
-    const actualParent = u.GetParent(hwnd);
-    // Compare via Buffer equality (koffi returns a pointer we can compare
-    // against the original Buffer's value).
-    const expected = Buffer.isBuffer(parentHwndBuf)
-      ? (parentHwndBuf.length >= 8
-          ? parentHwndBuf.readBigUInt64LE(0)
-          : BigInt(parentHwndBuf.readUInt32LE(0)))
-      : null;
-    // koffi pointer → BigInt via koffi.address() if available
-    let actualBig = null;
-    try { actualBig = BigInt(koffi.address(actualParent)); } catch (_) {}
-    if (expected !== null && actualBig !== null && actualBig !== expected) {
-      console.warn('[user32] GetParent mismatch! expected=' + expected +
-                   ' actual=' + actualBig + ' — child may still be detached');
+    const actual = u.GetParent(hwnd);
+    // koffi may return uint64 as Number for small values — normalize to BigInt.
+    const actualBig = BigInt(actual);
+    if (actualBig === parentVal) {
+      console.log('[user32] GetParent verified: child correctly parented to 0x' + parentVal.toString(16));
     } else {
-      console.log('[user32] GetParent verified: child is correctly parented');
+      console.warn('[user32] GetParent mismatch! expected=0x' + parentVal.toString(16) +
+                   ' actual=0x' + actualBig.toString(16) + ' — WS_POPUP owner may differ');
     }
   } catch (err) {
-    console.warn('[user32] GetParent verification failed (non-fatal):', err.message);
+    console.warn('[user32] GetParent verification failed:', err.message);
   }
 
-  // Force the child to the top of the z-order so it paints above Chromium's
-  // GPU compositor surface (a sibling HWND inside the BrowserWindow).
+  // Force child above Chromium's GPU compositor.
   bringToTop(hwnd);
 
-  return hwnd;
+  return hwnd;  // BigInt HWND value
 }
 
 /**
  * Move + resize the child HWND to match the renderer's reported rect.
- *
- * Uses SetWindowPos with SWP_NOZORDER|SWP_NOACTIVATE|SWP_SHOWWINDOW — we
- * do NOT touch z-order here (call bringToTop() separately if needed).
- *
- * Coordinates must be in PHYSICAL pixels (already scaled by devicePixelRatio
- * on the renderer side).
+ * Coordinates must be in PHYSICAL pixels (scaled by devicePixelRatio).
  */
 function moveWindow(hwnd, x, y, w, h, repaint = true) {
   const u = load();
-  return u.SetWindowPos(hwnd, null, Math.round(x), Math.round(y), Math.round(w), Math.round(h),
-    u.SWP_NOZORDER | u.SWP_NOACTIVATE | u.SWP_SHOWWINDOW | (repaint ? 0 : 0));  // SWP_SHOWWINDOW ensures visible
+  // SWP_NOZORDER: don't change z-order. SWP_SHOWWINDOW: ensure visible.
+  return u.SetWindowPos(hwnd, 0n, Math.round(x), Math.round(y), Math.round(w), Math.round(h),
+    u.SWP_NOZORDER | u.SWP_NOACTIVATE | u.SWP_SHOWWINDOW);
 }
 
 /**
- * Convenience wrapper — same as moveWindow but takes a rect object.
+ * Convenience wrapper — takes a rect object { x, y, width, height }.
  */
 function syncPosition(hwnd, rect) {
   if (!rect || !rect.width || !rect.height) {
@@ -236,39 +223,22 @@ function syncPosition(hwnd, rect) {
 
 /**
  * Force the child HWND above Chromium's GPU compositor surface.
- *
- * Call this after every moveWindow, after every BrowserWindow move/resize,
- * and after DPI changes. Without this, Chromium's GPU surface wins z-order
- * and the child HWND (where VLC paints) is invisible.
- *
- * HWND_TOPMOST = (HWND)-1 — we pass it as a sentinel. Koffi accepts a
- * BigInt for `void *` parameters when explicitly typed.
+ * Now that SetWindowPos takes uint64, HWND_TOPMOST is just 0xFFFFFFFFFFFFFFFFn.
  */
 function bringToTop(hwnd) {
   const u = load();
   try {
-    // Pass HWND_TOPMOST as a literal pointer. Koffi needs an explicit pointer
-    // type, not a bare number — use koffi.as() to wrap it.
-    const topmost = koffi.as(u.HWND_TOPMOST, 'void *');
-    return u.SetWindowPos(hwnd, topmost, 0, 0, 0, 0,
+    // HWND_TOPMOST = (HWND)-1 = 0xFFFFFFFFFFFFFFFF as uint64 BigInt
+    return u.SetWindowPos(hwnd, 0xFFFFFFFFFFFFFFFFn, 0, 0, 0, 0,
       u.SWP_NOMOVE | u.SWP_NOSIZE | u.SWP_NOACTIVATE | u.SWP_SHOWWINDOW);
   } catch (err) {
-    // Fallback: try passing the sentinel as a Buffer (8-byte LE of -1).
-    try {
-      const topmostBuf = Buffer.alloc(8);
-      topmostBuf.writeBigUInt64LE(BigInt(u.HWND_TOPMOST) & 0xFFFFFFFFFFFFFFFFn, 0);
-      return u.SetWindowPos(hwnd, topmostBuf, 0, 0, 0, 0,
-        u.SWP_NOMOVE | u.SWP_NOSIZE | u.SWP_NOACTIVATE | u.SWP_SHOWWINDOW);
-    } catch (err2) {
-      console.warn('[user32] bringToTop failed:', err2.message);
-      return 0;
-    }
+    console.warn('[user32] bringToTop failed:', err.message);
+    return 0;
   }
 }
 
 function showWindow(hwnd, visible = true) {
   const u = load();
-  // SW_SHOWNOACTIVATE = 4 — show without stealing focus from Electron.
   return u.ShowWindow(hwnd, visible ? u.SW_SHOWNOACTIVATE : u.SW_HIDE);
 }
 
@@ -278,23 +248,17 @@ function destroyWindow(hwnd) {
 }
 
 /**
- * Check if the child HWND is actually parented to the expected parent.
- * Returns true if parented, false if detached (the v1 bug).
+ * Check if child HWND is parented to expectedParentBuf (Buffer from Electron).
+ * With uint64 returns, GetParent returns a BigInt we can compare directly.
  */
 function isParentedTo(childHwnd, expectedParentBuf) {
   if (!childHwnd || !expectedParentBuf) return false;
   const u = load();
   try {
+    const expected = hwndBufferToPointer(expectedParentBuf);
     const actual = u.GetParent(childHwnd);
-    if (!actual) return false;
-    const expectedBig = Buffer.isBuffer(expectedParentBuf)
-      ? (expectedParentBuf.length >= 8
-          ? expectedParentBuf.readBigUInt64LE(0)
-          : BigInt(expectedParentBuf.readUInt32LE(0)))
-      : null;
-    let actualBig = null;
-    try { actualBig = BigInt(koffi.address(actual)); } catch (_) {}
-    return expectedBig !== null && actualBig !== null && actualBig === expectedBig;
+    // Normalize to BigInt — koffi may return uint64 as Number for small values.
+    return BigInt(actual) === BigInt(expected);
   } catch (_) {
     return false;
   }

@@ -85,6 +85,7 @@ class VideoScreen {
     this._reportRectRaw({ x: 0, y: 0, width: 0, height: 0 });
 
     document.body.classList.remove('video-active');
+    document.body.classList.remove('controls-visible');
   }
 
   isVisible() { return this._visible; }
@@ -218,6 +219,7 @@ class VideoScreen {
   _showControls() {
     if (!this._visible) return;
     this.overlay.classList.add('visible');
+    document.body.classList.add('controls-visible');
     this._resetAutoHide();
   }
 
@@ -234,6 +236,7 @@ class VideoScreen {
       // Only auto-hide if not dragging and track menu closed
       if (this.trackMenu && this.trackMenu.isVisible()) return;
       this.overlay.classList.remove('visible');
+      document.body.classList.remove('controls-visible');
     }, this._autoHideMs);
   }
 
@@ -399,4 +402,8 @@ class VideoScreen {
   }
 }
 
-module.exports = VideoScreen;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = VideoScreen;
+} else {
+  window.VideoScreen = VideoScreen;
+}

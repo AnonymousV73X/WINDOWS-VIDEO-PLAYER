@@ -34,6 +34,7 @@ class LibraryView {
     this._cardElements = new Map();  // videoId → {card, thumbImg, blurupImg}
     this._thumbnailQueue = new Set();
     this._thumbnailPending = new Set();
+    this._savedScrollTop = 0;
   }
 
   init(callbacks = {}) {
@@ -54,9 +55,33 @@ class LibraryView {
     });
   }
 
+  // ─── Scroll preservation ────────────────────────────────────────
+  saveScrollPosition() {
+    const container = document.getElementById('library-view');
+    this._savedScrollTop = container ? container.scrollTop : 0;
+  }
+
+  restoreScrollPosition(videoId) {
+    const container = document.getElementById('library-view');
+    if (!container) return;
+    // Try to scroll the clicked card into view first.
+    if (videoId) {
+      const entry = this._cardElements.get(videoId);
+      if (entry && entry.card) {
+        requestAnimationFrame(() => {
+          entry.card.scrollIntoView({ block: 'center', behavior: 'instant' });
+        });
+        return;
+      }
+    }
+    // Fallback: restore raw scrollTop.
+    requestAnimationFrame(() => {
+      container.scrollTop = this._savedScrollTop;
+    });
+  }
+
   // ═══ View switching ═════════════════════════════════════════════
-  setView(view, opts = {}) {
-    this._view = view;
+  setView(view, opts = {}) {    this._view = view;
     const titles = {
       library: { title: 'Library', subtitle: 'Your videos' },
       history: { title: 'Watch History', subtitle: 'Recently watched' },
@@ -128,13 +153,10 @@ class LibraryView {
       <div class="video-card-thumb">
         <div class="video-card-thumb-placeholder">
           <svg viewBox="0 0 24 24">
-            <polygon points="5 3 19 12 5 21 5 3"/>
+            <path d="M6 4l12 8-12 8V4z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
           </svg>
         </div>
         ${dur ? `<div class="video-card-duration">${dur}</div>` : ''}
-        <button class="video-card-play-btn" title="Play">
-          <svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>
-        </button>
       </div>
       <div class="video-card-title" title="${this._escape(video.title || '')}">${this._escape(video.title || 'Untitled')}</div>
       <div class="video-card-meta">
@@ -144,13 +166,6 @@ class LibraryView {
 
     // Click on card → play
     this._addHandler(card, 'click', () => {
-      this._callbacks.onPlayVideo?.(video);
-    });
-
-    // Click on play button → play (stop propagation to avoid double)
-    const playBtn = card.querySelector('.video-card-play-btn');
-    this._addHandler(playBtn, 'click', (e) => {
-      e.stopPropagation();
       this._callbacks.onPlayVideo?.(video);
     });
 
@@ -306,4 +321,8 @@ class LibraryView {
   }
 }
 
-module.exports = LibraryView;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = LibraryView;
+} else {
+  window.LibraryView = LibraryView;
+}

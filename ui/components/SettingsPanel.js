@@ -453,4 +453,8 @@ class SettingsPanel {
   }
 }
 
-module.exports = SettingsPanel;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = SettingsPanel;
+} else {
+  window.SettingsPanel = SettingsPanel;
+}

@@ -45,8 +45,8 @@
     <div class="splash-inner">
       <div class="splash-icon-wrap">
         <div class="splash-icon-glow"></div>
-        <svg class="splash-icon" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M21 3V15.5C21 17.43 19.43 19 17.5 19C15.57 19 14 17.43 14 15.5C14 13.57 15.57 12 17.5 12C18.04 12 18.55 12.12 19 12.34V7H10V15.5C10 17.43 8.43 19 6.5 19C4.57 19 3 17.43 3 15.5C3 13.57 4.57 12 6.5 12C7.04 12 7.55 12.12 8 12.34V5C8 3.9 8.9 3 10 3H21M19 5H10V6H19V5M6.5 13.5C5.67 13.5 5 14.17 5 15C5 15.83 5.67 16.5 6.5 16.5C7.33 16.5 8 15.83 8 15C8 14.17 7.33 13.5 6.5 13.5M17.5 13.5C16.67 13.5 16 14.17 16 15C16 15.83 16.67 16.5 17.5 16.5C18.33 16.5 19 15.83 19 15C19 14.17 18.33 13.5 17.5 13.5Z"/>
+        <svg class="splash-icon" viewBox="0 0 24 24" fill="none">
+          <path d="M16 10L18.5768 8.45392C19.3699 7.97803 19.7665 7.74009 20.0928 7.77051C20.3773 7.79703 20.6369 7.944 20.806 8.17433C21 8.43848 21 8.90095 21 9.8259V14.1741C21 15.099 21 15.5615 20.806 15.8257C20.6369 16.056 20.3773 16.203 20.0928 16.2295C19.7665 16.2599 19.3699 16.022 18.5768 15.5461L16 14M6.2 18H12.8C13.9201 18 14.4802 18 14.908 17.782C15.2843 17.5903 15.5903 17.2843 15.782 16.908C16 16.4802 16 15.9201 16 14.8V9.2C16 8.0799 16 7.51984 15.782 7.09202C15.5903 6.71569 15.2843 6.40973 14.908 6.21799C14.4802 6 13.9201 6 12.8 6H6.2C5.0799 6 4.51984 6 4.09202 6.21799C3.71569 6.40973 3.40973 6.71569 3.21799 7.09202C3 7.51984 3 8.07989 3 9.2V14.8C3 15.9201 3 16.4802 3.21799 16.908C3.40973 17.2843 3.71569 17.5903 4.09202 17.782C4.51984 18 5.07989 18 6.2 18Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
       <div class="splash-title">NovaPlay</div>
@@ -67,23 +67,17 @@
     <div class="titlebar" id="titlebar">
       <div class="titlebar-left">
         <div class="titlebar-logo">
-          <svg viewBox="0 0 24 24">
-            <path d="M8 5v14l11-7z"/>
+          <svg viewBox="-1 0 12 12" fill="#000000">
+            <path d="M18.074,3650.7335 L12.308,3654.6315 C10.903,3655.5815 9,3654.5835 9,3652.8985 L9,3645.1015 C9,3643.4155 10.903,3642.4185 12.308,3643.3685 L18.074,3647.2665 C19.306,3648.0995 19.306,3649.9005 18.074,3650.7335" transform="translate(-8, -3642)"/>
           </svg>
         </div>
-        <div class="titlebar-name">NovaPlay</div>
+        <span class="titlebar-name">NovaPlay</span>
       </div>
-      <div class="titlebar-controls">
-        <button class="titlebar-btn" id="titlebar-minimize" title="Minimize">
-          <svg viewBox="0 0 10 10"><line x1="0" y1="5" x2="10" y2="5"/></svg>
-        </button>
-        <button class="titlebar-btn" id="titlebar-maximize" title="Maximize">
-          <svg viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none"/></svg>
-        </button>
-        <button class="titlebar-btn close" id="titlebar-close" title="Close">
-          <svg viewBox="0 0 10 10"><line x1="0" y1="0" x2="10" y2="10"/><line x1="0" y1="10" x2="10" y2="0"/></svg>
-        </button>
-      </div>
+    </div>
+    <div class="win-controls">
+      <button class="win-btn" id="titlebar-minimize" aria-label="Minimize"><svg viewBox="0 0 12 12"><line x1="1.5" y1="6" x2="10.5" y2="6"/></svg></button>
+      <button class="win-btn" id="titlebar-maximize" aria-label="Maximize"><svg viewBox="0 0 12 12"><rect x="1.75" y="1.75" width="8.5" height="8.5" rx="1.2"/></svg></button>
+      <button class="win-btn win-close" id="titlebar-close" aria-label="Close"><svg viewBox="0 0 12 12"><line x1="1.75" y1="1.75" x2="10.25" y2="10.25"/><line x1="10.25" y1="1.75" x2="1.75" y2="10.25"/></svg></button>
     </div>
 
     <!-- ═══ APP BODY ═══ -->
@@ -346,20 +340,20 @@
 
                 <div class="player-controls-group center">
                   <button class="transport-btn" id="prev-btn" title="Previous (Shift+←)">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polygon points="19 20 9 12 19 4 19 20"/>
-                      <line x1="5" y1="19" x2="5" y2="5"/>
+                    <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+                      <path d="M19 20L9 12l10-8v16z"/>
+                      <rect x="5" y="4" width="3" height="16" rx="1.5"/>
                     </svg>
                   </button>
                   <button class="play-btn" id="play-pause-btn" title="Play/Pause (Space)">
-                    <svg id="play-pause-icon" viewBox="0 0 24 24" fill="currentColor">
-                      <polygon points="5,3 19,12 5,21"/>
+                    <svg id="play-pause-icon" viewBox="0 0 24 24">
+                      <path d="M6 4l12 8-12 8V4z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
                     </svg>
                   </button>
                   <button class="transport-btn" id="next-btn" title="Next (Shift+→)">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polygon points="5 4 15 12 5 20 5 4"/>
-                      <line x1="19" y1="5" x2="19" y2="19"/>
+                    <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+                      <path d="M5 4l10 8-10 8V4z"/>
+                      <rect x="16" y="4" width="3" height="16" rx="1.5"/>
                     </svg>
                   </button>
                 </div>
@@ -408,8 +402,8 @@
       <div class="np-left">
         <div class="np-thumb" id="np-thumb">
           <div class="np-thumb-placeholder">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="5 3 19 12 5 21 5 3"/>
+            <svg viewBox="0 0 24 24">
+              <path d="M6 4l12 8-12 8V4z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
             </svg>
           </div>
         </div>
@@ -430,20 +424,20 @@
             </svg>
           </button>
           <button class="np-btn" id="np-prev-btn" title="Previous">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="19 20 9 12 19 4 19 20"/>
-              <line x1="5" y1="19" x2="5" y2="5"/>
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+              <path d="M19 20L9 12l10-8v16z"/>
+              <rect x="5" y="4" width="3" height="16" rx="1.5"/>
             </svg>
           </button>
           <button class="np-play" id="np-play-btn" title="Play/Pause">
-            <svg id="np-play-icon" viewBox="0 0 24 24" fill="currentColor">
-              <polygon points="5,3 19,12 5,21"/>
+            <svg id="np-play-icon" viewBox="0 0 24 24">
+              <path d="M6 4l12 8-12 8V4z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
             </svg>
           </button>
           <button class="np-btn" id="np-next-btn" title="Next">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="5 4 15 12 5 20 5 4"/>
-              <line x1="19" y1="5" x2="19" y2="19"/>
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+              <path d="M5 4l10 8-10 8V4z"/>
+              <rect x="16" y="4" width="3" height="16" rx="1.5"/>
             </svg>
           </button>
           <button class="np-btn" id="np-repeat-btn" title="Repeat">
@@ -488,6 +482,17 @@
       <div class="dialog-actions" id="dialog-actions"></div>
     </div>
   </div>
+
+  <!-- Component Scripts -->
+  <script src="components/Utils.js"></script>
+  <script src="components/VirtualList.js"></script>
+  <script src="components/Sidebar.js"></script>
+  <script src="components/LibraryView.js"></script>
+  <script src="components/VideoScreen.js"></script>
+  <script src="components/PlayerControls.js"></script>
+  <script src="components/TrackMenu.js"></script>
+  <script src="components/SettingsPanel.js"></script>
+  <script src="components/NowPlayingBar.js"></script>
 
   <!-- Renderer entry -->
   <script src="renderer.js"></script>

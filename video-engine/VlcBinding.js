@@ -172,9 +172,10 @@ function load() {
     libvlc_media_player_get_chapter_count: _lib.func('int libvlc_media_player_get_chapter_count(void *mp)'),
     libvlc_media_player_get_title_count: _lib.func('int libvlc_media_player_get_title_count(void *mp)'),
 
-    // Window handle (HWND on Windows, NSView on macOS, X Window on Linux)
-    libvlc_media_player_set_hwnd:  _lib.func('void libvlc_media_player_set_hwnd(void *mp, void *hwnd)'),
-    libvlc_media_player_get_hwnd:  _lib.func('void * libvlc_media_player_get_hwnd(void *mp)'),
+    // Window handle — hwnd is passed as uint64 (BigInt) so koffi sends
+    // the numeric HWND value directly, not a pointer to a buffer.
+    libvlc_media_player_set_hwnd:  _lib.func('void libvlc_media_player_set_hwnd(void *mp, uint64 hwnd)'),
+    libvlc_media_player_get_hwnd:  _lib.func('uint64 libvlc_media_player_get_hwnd(void *mp)'),
 
     // Track description walker (linked list returned by libvlc)
     libvlc_track_description_release: _lib.func('void libvlc_track_description_release(void *td)'),

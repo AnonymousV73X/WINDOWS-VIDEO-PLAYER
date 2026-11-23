@@ -262,17 +262,17 @@ class PlayerControls {
     this._isPlaying = !!playing;
     if (this._isPlaying) {
       // Pause icon
-      this.playPauseIcon.innerHTML = `<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>`;
+      this.playPauseIcon.innerHTML = `<rect x="6" y="4" width="4" height="16" rx="1.5"/><rect x="14" y="4" width="4" height="16" rx="1.5"/>`;
     } else {
       // Play icon
-      this.playPauseIcon.innerHTML = `<polygon points="5,3 19,12 5,21"/>`;
+      this.playPauseIcon.innerHTML = `<path d="M6 4l12 8-12 8V4z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
     }
     // Update now-playing bar play icon too
     const npPlayIcon = document.getElementById('np-play-icon');
     if (npPlayIcon) {
       npPlayIcon.innerHTML = this._isPlaying
-        ? `<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>`
-        : `<polygon points="5,3 19,12 5,21"/>`;
+        ? `<rect x="6" y="4" width="4" height="16" rx="1.5"/><rect x="14" y="4" width="4" height="16" rx="1.5"/>`
+        : `<path d="M6 4l12 8-12 8V4z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
     }
   }
 
@@ -439,4 +439,8 @@ class PlayerControls {
   }
 }
 
-module.exports = PlayerControls;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = PlayerControls;
+} else {
+  window.PlayerControls = PlayerControls;
+}

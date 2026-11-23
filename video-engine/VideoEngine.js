@@ -55,6 +55,21 @@ class VideoEngine {
     } catch (_) {}
 
     this._available = false;
+    this._mediaPlayer = null;
+    this._media = null;
+    this._childHwnd = null;
+    this._parentHwnd = null;
+    this._pollTimer = null;
+    this._lastState = -1;
+    this._duration = 0;
+    this._mainWindow = null;
+    this._videoRect = { x: 0, y: 0, width: 0, height: 0 };
+    this._lastDpr = 0;
+    this._windowEventHandlers = [];
+    this._rectSyncTimer = null;
+    this._lastChildSyncAt = 0;
+    this._vlcInstance = null;
+
     let _loadError = null;
     try {
       vlc.load();
@@ -94,16 +109,21 @@ class VideoEngine {
         '--no-playlist-tree'         // flat playlist
       ];
 
-      // Convert argv to a NULL-terminated char*[] for libvlc_new.
-      // Koffi marshals JS string[] → char *const * automatically when the
-      // declared type is `char **`.
-      this._vlcInstance = v.libvlc_new(argv.length, argv);
+      try {
+        this._vlcInstance = v.libvlc_new(argv.length, argv);
+      } catch (_) {
+        this._vlcInstance = null;
+      }
+      if (!this._vlcInstance) {
+        // Fallback to minimal/default instantiation
+        this._vlcInstance = v.libvlc_new(0, null);
+      }
       if (!this._vlcInstance) {
         throw new Error(
           'libvlc_new returned null — VLC_PLUGIN_PATH=' + (process.env.VLC_PLUGIN_PATH || 'unset')
         );
       }
-      console.log('[engine] libVLC instance created with', argv.length, 'args');
+      console.log('[engine] libVLC instance created OK');
       try {
         const ver = v.libvlc_get_version();
         console.log('[engine] libVLC version:', ver);
@@ -113,20 +133,6 @@ class VideoEngine {
       console.error('[engine] libvlc_new failed:', err.message);
       return;
     }
-
-    this._mediaPlayer = null;
-    this._media = null;
-    this._childHwnd = null;
-    this._parentHwnd = null;
-    this._pollTimer = null;
-    this._lastState = -1;
-    this._duration = 0;
-    this._mainWindow = null;
-    this._videoRect = { x: 0, y: 0, width: 0, height: 0 };
-    this._lastDpr = 0;
-    this._windowEventHandlers = [];
-    this._rectSyncTimer = null;
-    this._lastChildSyncAt = 0;
   }
 
   isAvailable() { return this._available; }
@@ -315,6 +321,7 @@ class VideoEngine {
   load(filePath) {
     if (!this._available) return { ok: false, error: 'libVLC unavailable' };
     if (!require('fs').existsSync(filePath)) {
+      console.error('[engine] load: file not found:', filePath);
       return { ok: false, error: 'File not found: ' + filePath };
     }
 
@@ -324,15 +331,18 @@ class VideoEngine {
       this._releaseMedia();
 
       const v = vlc.load();
+      console.log('[engine] load: calling libvlc_media_new_path for:', filePath);
       this._media = v.libvlc_media_new_path(this._vlcInstance, filePath);
       if (!this._media) throw new Error('libvlc_media_new_path returned null');
+      console.log('[engine] load: media created OK');
 
       this._mediaPlayer = v.libvlc_media_player_new_from_media(this._media);
       if (!this._mediaPlayer) throw new Error('libvlc_media_player_new_from_media returned null');
+      console.log('[engine] load: media player created OK');
 
       if (this._childHwnd) {
         v.libvlc_media_player_set_hwnd(this._mediaPlayer, this._childHwnd);
-        console.log('[engine] set_hwnd called with child HWND');
+        console.log('[engine] set_hwnd called with HWND 0x' + this._childHwnd.toString(16));
         this._updateChildWindowPosition();
       } else {
         console.warn('[engine] no child HWND — video will not display');
