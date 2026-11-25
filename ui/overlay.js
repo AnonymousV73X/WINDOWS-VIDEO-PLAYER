@@ -34,7 +34,7 @@ function hideControls() {
 function resetAutoHide() {
   if (_autoHideTimer) clearTimeout(_autoHideTimer);
   _autoHideTimer = setTimeout(() => {
-    if (!_isDraggingProgress && !_isDraggingVolume) hideControls();
+    if (!_isDraggingProgress && !_isDraggingVolume && !_menu) hideControls();
   }, _autoHideMs);
 }
 
@@ -240,21 +240,105 @@ document.getElementById("ov-back-btn").addEventListener("click", () => {
 });
 
 // ─── Action buttons ───────────────────────────────────────────────────
+let _menu = null,
+  _menuType = null;
+function closeMenu() {
+  if (_menu) {
+    _menu.remove();
+    _menu = null;
+    _menuType = null;
+  }
+  resetAutoHide();
+}
+async function openMenu(type) {
+  if (_menuType === type) {
+    closeMenu();
+    return;
+  }
+  closeMenu();
+  let t = { audio: [], subtitles: [], chapters: 0, currentChapter: 0 };
+  try {
+    t = (await window.novaAPI.invoke("nova:engine-tracks")) || t;
+  } catch (_) {}
+  const items = [];
+  let title = "",
+    onPick = null;
+  if (type === "audio") {
+    title = "Audio";
+    t.audio.forEach((x) =>
+      items.push({ label: x.name, sel: x.selected, id: x.id }),
+    );
+    onPick = (id) => window.novaAPI.invoke("nova:engine-audio-track", id);
+  } else if (type === "subtitle") {
+    title = "Subtitles";
+    const off = !t.subtitles.some((x) => x.selected && x.id !== -1);
+    items.push({ label: "Off", sel: off, id: -1 });
+    t.subtitles
+      .filter((x) => x.id !== -1)
+      .forEach((x) => items.push({ label: x.name, sel: x.selected, id: x.id }));
+    onPick = (id) => window.novaAPI.invoke("nova:engine-subtitle-track", id);
+  } else {
+    title = "Chapters";
+    for (let i = 0; i < t.chapters; i++)
+      items.push({
+        label: "Chapter " + (i + 1),
+        sel: i === t.currentChapter,
+        id: i,
+      });
+    onPick = (id) => window.novaAPI.invoke("nova:engine-chapter", id);
+  }
+  const m = document.createElement("div");
+  m.style.cssText =
+    "position:fixed;top:60px;right:16px;min-width:220px;max-width:340px;max-height:60vh;overflow:auto;" +
+    "background:rgba(20,20,20,.97);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:6px;" +
+    'box-shadow:0 10px 30px rgba(0,0,0,.6);z-index:100002;color:#fff;font:500 13px "Outfit","Segoe UI",sans-serif;pointer-events:auto;';
+  const h = document.createElement("div");
+  h.textContent = title;
+  h.style.cssText =
+    "padding:6px 10px;font-size:11px;letter-spacing:.8px;text-transform:uppercase;opacity:.6;";
+  m.appendChild(h);
+  if (!items.length) {
+    const e = document.createElement("div");
+    e.textContent = "None available";
+    e.style.cssText = "padding:8px 10px;opacity:.6;";
+    m.appendChild(e);
+  }
+  for (const it of items) {
+    const r = document.createElement("div");
+    r.textContent = (it.sel ? "\u2713  " : "\u2003 ") + it.label;
+    r.style.cssText =
+      "padding:8px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" +
+      (it.sel ? "background:rgba(255,255,255,.1);" : "");
+    r.onmouseenter = () => {
+      r.style.background = "rgba(255,255,255,.16)";
+    };
+    r.onmouseleave = () => {
+      r.style.background = it.sel ? "rgba(255,255,255,.1)" : "";
+    };
+    r.onclick = async () => {
+      await onPick(it.id);
+      closeMenu();
+    };
+    m.appendChild(r);
+  }
+  m.addEventListener("mousedown", (e) => e.stopPropagation());
+  document.body.appendChild(m);
+  _menu = m;
+  _menuType = type;
+  if (_autoHideTimer) clearTimeout(_autoHideTimer);
+}
+document.addEventListener("mousedown", (e) => {
+  if (_menu && !e.target.closest(".player-action-btn")) closeMenu();
+});
 document
   .getElementById("ov-audio-tracks")
-  .addEventListener("click", () =>
-    window.novaAPI.send("nova:overlay-action", "audio"),
-  );
+  .addEventListener("click", () => openMenu("audio"));
 document
   .getElementById("ov-subtitle-tracks")
-  .addEventListener("click", () =>
-    window.novaAPI.send("nova:overlay-action", "subtitle"),
-  );
+  .addEventListener("click", () => openMenu("subtitle"));
 document
   .getElementById("ov-chapters")
-  .addEventListener("click", () =>
-    window.novaAPI.send("nova:overlay-action", "chapters"),
-  );
+  .addEventListener("click", () => openMenu("chapters"));
 
 // ─── Window controls ─────────────────────────────────────────────────
 document
