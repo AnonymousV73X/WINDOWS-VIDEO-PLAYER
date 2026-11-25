@@ -263,6 +263,29 @@ function createMainWindow() {
 
   registerIPCHandlers.setOverlayWindow(overlayWindow);
 
+  const keepOverlayHiddenInLibrary = () => {
+    if (global.__videoActive) return;
+    try {
+      if (
+        overlayWindow &&
+        !overlayWindow.isDestroyed() &&
+        overlayWindow.isVisible()
+      )
+        overlayWindow.hide();
+    } catch (_) {}
+  };
+  for (const ev of [
+    "show",
+    "focus",
+    "restore",
+    "maximize",
+    "unmaximize",
+    "resize",
+  ]) {
+    mainWindow.on(ev, keepOverlayHiddenInLibrary);
+  }
+  mainWindow.webContents.on("did-finish-load", keepOverlayHiddenInLibrary);
+
   const syncOverlayBounds = () => {
     if (
       !mainWindow ||
