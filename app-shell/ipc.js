@@ -67,7 +67,8 @@ function registerIPCHandlers(mainWindow) {
       sendToMain("nova:overlay-back");
       return;
     }
-    _mainWindow?.close();
+    if (typeof global.__quitNow === "function") global.__quitNow();
+    else _mainWindow?.close();
   });
   ipcMain.handle(
     "nova:window-is-maximized",
