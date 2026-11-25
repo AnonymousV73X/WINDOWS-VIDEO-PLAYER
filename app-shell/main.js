@@ -243,6 +243,7 @@ function createMainWindow() {
   // over hardware-accelerated video.
   overlayWindow = new BrowserWindow({
     parent: mainWindow,
+    closable: false,
     transparent: true,
     backgroundColor: "#00000000",
     frame: false,
@@ -259,12 +260,7 @@ function createMainWindow() {
   });
   overlayWindow.loadFile(path.join(__dirname, "..", "ui", "overlay.html"));
   global.overlayWindow = overlayWindow;
-  overlayWindow.on("close", (e) => {
-    if (!global.__novaClosing && mainWindow && !mainWindow.isDestroyed()) {
-      e.preventDefault();
-      mainWindow.webContents.send("nova:overlay-back");
-    }
-  });
+
   registerIPCHandlers.setOverlayWindow(overlayWindow);
 
   const syncOverlayBounds = () => {
@@ -346,11 +342,11 @@ function createMainWindow() {
   mainWindow.on("close", () => {
     global.__novaClosing = true;
     try {
-      videoEngine?.destroy();
-    } catch (_) {}
-    try {
       if (overlayWindow && !overlayWindow.isDestroyed())
         overlayWindow.destroy();
+    } catch (_) {}
+    try {
+      videoEngine?.destroy();
     } catch (_) {}
     windowState.saveState(mainWindow);
   });
@@ -359,6 +355,7 @@ function createMainWindow() {
     mainWindow = null;
     overlayWindow = null;
     global.overlayWindow = null;
+    app.quit();
   });
 
   mainWindow.webContents.on("will-navigate", (event, url) => {
