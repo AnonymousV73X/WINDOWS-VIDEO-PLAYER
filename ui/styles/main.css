@@ -319,7 +319,8 @@ img {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 150px 0 14px;
+  padding: 0 0 0 14px;
+  width: calc(100% - 140px);
   flex-shrink: 0;
   border-bottom: none;
   -webkit-app-region: drag;
@@ -380,6 +381,7 @@ img {
   display: flex;
   z-index: 100001;
   -webkit-app-region: no-drag;
+  pointer-events: auto;
   transition: opacity 0.25s var(--ease);
 }
 
@@ -2646,3 +2648,6 @@ body.video-active .win-btn {
    ═══════════════════════════════════════════════════════════════════ */
 
 /* This is also handled by inline <script> in index.html for FOUC prevention */
+
+/* Native titleBarOverlay provides window controls in the library */
+.win-controls { display: none !important; }
