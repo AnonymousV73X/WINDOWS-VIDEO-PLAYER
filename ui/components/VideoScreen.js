@@ -65,57 +65,83 @@ class VideoScreen {
     return c;
   }
 
-  show(video) {
-    this._lastRect = null;
-    this._ensureCover().style.display = "block";
-    document.documentElement.style.background = "#000";
-    document.body.classList.add("video-active");
-    this._currentVideo = video;
-    this._visible = true;
-    this.screen.classList.add("active");
-    this.screen.style.cssText =
-      "position:fixed;inset:0;z-index:99999;background:#000;display:flex;";
-    this.titleEl.textContent = video.title || "Untitled";
+  _sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+  _raf2() {
+    return new Promise((r) =>
+      requestAnimationFrame(() => requestAnimationFrame(r)),
+    );
+  }
 
-    // Black is already painted synchronously above. Only AFTER it has been
-    // composited (2 frames) do we reveal the VLC HWND and the controls window,
-    // so the controls never appear over the library.
+  // Enter: fade to black -> swap UI under black -> reveal VLC -> fade controls in.
+  async show(video) {
     const accent =
       getComputedStyle(document.documentElement)
         .getPropertyValue("--green")
         .trim() || "#FF8800";
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          if (!this._visible) return;
-          window.novaAPI.send("nova:engine-set-video-visible", true);
-          this.reportRect();
-          window.novaAPI.send("nova:overlay-show", {
-            title: video.title || "Untitled",
-            accentColor: accent,
-          });
-        }, 60);
+    this._currentVideo = video;
+    this.titleEl.textContent = video.title || "Untitled";
+    const sendOverlay = () => {
+      if (this._useFallback) return;
+      window.novaAPI.send("nova:overlay-show", {
+        title: video.title || "Untitled",
+        accentColor: accent,
       });
-    });
+    };
 
-    // Show controls initially
-    this._showControls();
-  }
+    // Already in the player (next/prev): just refresh the title.
+    if (this._visible) {
+      sendOverlay();
+      return;
+    }
 
-  hide() {
-    this._visible = false;
-    this.screen.classList.remove("active");
-    this.screen.style.cssText = "";
-
-    // Hide the child HWND so it doesn't show stale frames
-    window.novaAPI.send("nova:engine-set-video-visible", false);
-    window.novaAPI.send("nova:overlay-hide");
-
-    // Report zero rect so the child HWND gets hidden
-    this._reportRectRaw({ x: 0, y: 0, width: 0, height: 0 });
+    const id = (this._tid = (this._tid || 0) + 1);
+    this._visible = true;
     this._lastRect = null;
 
-    // Fully stop playback (video + audio) so the next load starts clean
+    const cover = this._ensureCover();
+    cover.style.transition = "none";
+    cover.style.opacity = "0";
+    cover.style.display = "block";
+    void cover.offsetWidth;
+    cover.style.transition = "opacity 180ms ease";
+    cover.style.opacity = "1";
+    await this._sleep(200);
+    if (id !== this._tid) return;
+
+    // Fully black: swap the UI underneath without any visible jump.
+    document.documentElement.style.background = "#000";
+    document.body.classList.add("video-active");
+    this.screen.classList.add("active");
+    this.screen.style.cssText =
+      "position:fixed;inset:0;z-index:99999;background:#000;display:flex;";
+    this.overlay.style.display = this._useFallback ? "" : "none"; // overlay window owns the controls
+    window.novaAPI
+      .invoke("nova:window-set-overlay-chrome", true)
+      .catch(() => {});
+
+    await this._raf2();
+    if (id !== this._tid) return;
+
+    window.novaAPI.send("nova:engine-set-video-visible", true);
+    this.reportRect();
+    sendOverlay();
+    if (this._useFallback) this._showControls();
+  }
+
+  // Exit: hide VLC + fade controls out over black -> restore library -> fade black away.
+  async hide() {
+    if (!this._visible) return;
+    const id = (this._tid = (this._tid || 0) + 1);
+    this._visible = false;
+
+    window.novaAPI.send("nova:engine-set-video-visible", false);
+    this._reportRectRaw({ x: 0, y: 0, width: 0, height: 0 });
+    this._lastRect = null;
+    window.novaAPI.send("nova:overlay-hide");
+
+    // Stop playback (video + audio) so the next load starts clean
     try {
       window.novaAPI.invoke("nova:engine-stop");
     } catch (_) {}
@@ -125,10 +151,23 @@ class VideoScreen {
       this.fallbackEl.load();
     } catch (_) {}
 
+    await this._sleep(230);
+    if (id !== this._tid) return;
+
+    this.screen.classList.remove("active");
+    this.screen.style.cssText = "";
+    this.overlay.classList.remove("visible");
     document.body.classList.remove("video-active");
     document.body.classList.remove("controls-visible");
-    if (this._cover) this._cover.style.display = "none";
     document.documentElement.style.background = "";
+
+    const cover = this._cover;
+    if (cover) {
+      cover.style.opacity = "0";
+      setTimeout(() => {
+        if (id === this._tid && !this._visible) cover.style.display = "none";
+      }, 220);
+    }
   }
 
   isVisible() {
