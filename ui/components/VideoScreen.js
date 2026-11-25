@@ -21,12 +21,12 @@
 
 class VideoScreen {
   constructor() {
-    this.screen = document.getElementById('video-screen');
-    this.videoArea = document.getElementById('video-area');
-    this.fallbackEl = document.getElementById('video-fallback-element');
-    this.overlay = document.getElementById('player-controls-overlay');
-    this.backBtn = document.getElementById('player-back-btn');
-    this.titleEl = document.getElementById('player-video-title');
+    this.screen = document.getElementById("video-screen");
+    this.videoArea = document.getElementById("video-area");
+    this.fallbackEl = document.getElementById("video-fallback-element");
+    this.overlay = document.getElementById("player-controls-overlay");
+    this.backBtn = document.getElementById("player-back-btn");
+    this.titleEl = document.getElementById("player-video-title");
 
     this.playerControls = null;
     this.trackMenu = null;
@@ -56,29 +56,34 @@ class VideoScreen {
   // ─── Show / Hide ────────────────────────────────────────────────
   _ensureCover() {
     if (this._cover) return this._cover;
-    const c = document.createElement('div');
-    c.id = 'video-black-cover';
-    c.style.cssText = 'position:fixed;inset:0;z-index:99998;background:#000;display:none;';
+    const c = document.createElement("div");
+    c.id = "video-black-cover";
+    c.style.cssText =
+      "position:fixed;inset:0;z-index:99998;background:#000;display:none;";
     document.body.appendChild(c);
     this._cover = c;
     return c;
   }
 
   show(video) {
-    this._ensureCover().style.display = 'block';
-    document.documentElement.style.background = '#000';
-    document.body.classList.add('video-active');
+    this._ensureCover().style.display = "block";
+    document.documentElement.style.background = "#000";
+    document.body.classList.add("video-active");
     this._currentVideo = video;
     this._visible = true;
-    this.screen.classList.add('active');
-    this.screen.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#000;display:flex;';
-    this.titleEl.textContent = video.title || 'Untitled';
+    this.screen.classList.add("active");
+    this.screen.style.cssText =
+      "position:fixed;inset:0;z-index:99999;background:#000;display:flex;";
+    this.titleEl.textContent = video.title || "Untitled";
 
     // Tell the engine to show the child HWND
-    window.novaAPI.send('nova:engine-set-video-visible', true);
-    window.novaAPI.send('nova:overlay-show', {
-      title: video.title || 'Untitled',
-      accentColor: getComputedStyle(document.documentElement).getPropertyValue('--green').trim() || '#FF8800'
+    window.novaAPI.send("nova:engine-set-video-visible", true);
+    window.novaAPI.send("nova:overlay-show", {
+      title: video.title || "Untitled",
+      accentColor:
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--green")
+          .trim() || "#FF8800",
     });
 
     // Report rect after layout settles
@@ -92,41 +97,47 @@ class VideoScreen {
 
   hide() {
     this._visible = false;
-    this.screen.classList.remove('active');
-    this.screen.style.cssText = '';
+    this.screen.classList.remove("active");
+    this.screen.style.cssText = "";
 
     // Hide the child HWND so it doesn't show stale frames
-    window.novaAPI.send('nova:engine-set-video-visible', false);
-    window.novaAPI.send('nova:overlay-hide');
+    window.novaAPI.send("nova:engine-set-video-visible", false);
+    window.novaAPI.send("nova:overlay-hide");
 
     // Report zero rect so the child HWND gets hidden
     this._reportRectRaw({ x: 0, y: 0, width: 0, height: 0 });
 
-    document.body.classList.remove('video-active');
-    document.body.classList.remove('controls-visible');
-    if (this._cover) this._cover.style.display = 'none';
-    document.documentElement.style.background = '';
+    document.body.classList.remove("video-active");
+    document.body.classList.remove("controls-visible");
+    if (this._cover) this._cover.style.display = "none";
+    document.documentElement.style.background = "";
   }
 
-  isVisible() { return this._visible; }
+  isVisible() {
+    return this._visible;
+  }
 
   // ─── Engine availability ────────────────────────────────────────
   async checkEngine() {
     try {
-      const available = await window.novaAPI.invoke('nova:engine-available');
+      const available = await window.novaAPI.invoke("nova:engine-available");
       this._useFallback = !available;
       if (this._useFallback) {
-        this.fallbackEl.classList.add('active');
-        console.warn('[video-screen] libVLC unavailable — using HTML5 fallback');
+        this.fallbackEl.classList.add("active");
+        console.warn(
+          "[video-screen] libVLC unavailable — using HTML5 fallback",
+        );
       } else {
-        this.fallbackEl.classList.remove('active');
-        console.log('[video-screen] libVLC available — using native HWND embedding');
+        this.fallbackEl.classList.remove("active");
+        console.log(
+          "[video-screen] libVLC available — using native HWND embedding",
+        );
       }
       return available;
     } catch (err) {
-      console.error('[video-screen] engine check failed:', err);
+      console.error("[video-screen] engine check failed:", err);
       this._useFallback = true;
-      this.fallbackEl.classList.add('active');
+      this.fallbackEl.classList.add("active");
       return false;
     }
   }
@@ -136,11 +147,11 @@ class VideoScreen {
     const engineAvailable = await this.checkEngine();
 
     if (engineAvailable) {
-      const r = await window.novaAPI.invoke('nova:engine-load', video.filePath);
+      const r = await window.novaAPI.invoke("nova:engine-load", video.filePath);
       if (!r || !r.ok) {
-        console.error('[video-screen] engine-load failed, falling back:', r);
+        console.error("[video-screen] engine-load failed, falling back:", r);
         this._useFallback = true;
-        this.fallbackEl.classList.add('active');
+        this.fallbackEl.classList.add("active");
         this._loadFallback(video.filePath);
       }
     } else {
@@ -155,24 +166,24 @@ class VideoScreen {
 
   _loadFallback(filePath) {
     // HTML5 <video> fallback via nova-video:// protocol
-    const url = 'nova-video://local/' + encodeURIComponent(filePath);
+    const url = "nova-video://local/" + encodeURIComponent(filePath);
     this.fallbackEl.src = url;
     this.fallbackEl.load();
-    this.fallbackEl.play().catch(err => {
-      console.warn('[video-screen] fallback autoplay blocked:', err.message);
+    this.fallbackEl.play().catch((err) => {
+      console.warn("[video-screen] fallback autoplay blocked:", err.message);
     });
   }
 
   // ─── Rect reporting — send .video-area rect to main process ─────
   _initRectReporting() {
     // ResizeObserver fires when the .video-area changes size (layout, sidebar resize, etc.)
-    if (typeof ResizeObserver !== 'undefined') {
+    if (typeof ResizeObserver !== "undefined") {
       this._resizeObserver = new ResizeObserver(() => this.reportRect());
       this._resizeObserver.observe(this.videoArea);
     }
 
     // Window resize + scroll
-    this._addHandler(window, 'resize', () => this.reportRect());
+    this._addHandler(window, "resize", () => this.reportRect());
 
     // Periodic rect sync (60fps cap) — catches cases where ResizeObserver
     // doesn't fire (e.g. CSS transitions on the video-area's parent).
@@ -184,13 +195,17 @@ class VideoScreen {
 
   _initRectRequestListener() {
     // Main process asks us to re-report the rect after window events
-    window.novaAPI.on('nova:video-rect-request', () => {
+    window.novaAPI.on("nova:video-rect-request", () => {
       this.reportRect();
     });
   }
 
   reportRect() {
-    if (!this._visible || !this.videoArea || this.screen.classList.contains('active') === false) {
+    if (
+      !this._visible ||
+      !this.videoArea ||
+      this.screen.classList.contains("active") === false
+    ) {
       this._reportRectRaw({ x: 0, y: 0, width: 0, height: 0 });
       return;
     }
@@ -203,7 +218,7 @@ class VideoScreen {
       x: Math.round(rect.left * dpr),
       y: Math.round(rect.top * dpr),
       width: Math.round(rect.width * dpr),
-      height: Math.round(rect.height * dpr)
+      height: Math.round(rect.height * dpr),
     };
 
     // Skip if unchanged
@@ -213,33 +228,37 @@ class VideoScreen {
   }
 
   _reportRectRaw(rect) {
-    window.novaAPI.send('nova:video-rect', rect);
+    window.novaAPI.send("nova:video-rect", rect);
   }
 
   _rectEquals(a, b) {
     if (!a || !b) return false;
-    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+    return (
+      a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+    );
   }
 
   // ─── Controls overlay auto-hide ─────────────────────────────────
   _initAutoHide() {
-    this._addHandler(this.screen, 'mousemove', () => this._showControls());
-    this._addHandler(this.screen, 'mousedown', () => this._showControls());
-    this._addHandler(this.screen, 'touchstart', () => this._showControls(), { passive: true });
+    this._addHandler(this.screen, "mousemove", () => this._showControls());
+    this._addHandler(this.screen, "mousedown", () => this._showControls());
+    this._addHandler(this.screen, "touchstart", () => this._showControls(), {
+      passive: true,
+    });
 
     // Pause auto-hide when hovering controls
-    this._addHandler(this.overlay, 'mouseenter', () => this._pauseAutoHide());
-    this._addHandler(this.overlay, 'mouseleave', () => this._showControls());
+    this._addHandler(this.overlay, "mouseenter", () => this._pauseAutoHide());
+    this._addHandler(this.overlay, "mouseleave", () => this._showControls());
 
     // Disable auto-hide when dragging progress/volume
-    document.addEventListener('np:dragging-start', () => this._pauseAutoHide());
-    document.addEventListener('np:dragging-end', () => this._showControls());
+    document.addEventListener("np:dragging-start", () => this._pauseAutoHide());
+    document.addEventListener("np:dragging-end", () => this._showControls());
   }
 
   _showControls() {
     if (!this._visible) return;
-    this.overlay.classList.add('visible');
-    document.body.classList.add('controls-visible');
+    this.overlay.classList.add("visible");
+    document.body.classList.add("controls-visible");
     this._resetAutoHide();
   }
 
@@ -255,8 +274,8 @@ class VideoScreen {
     this._autoHideTimer = setTimeout(() => {
       // Only auto-hide if not dragging and track menu closed
       if (this.trackMenu && this.trackMenu.isVisible()) return;
-      this.overlay.classList.remove('visible');
-      document.body.classList.remove('controls-visible');
+      this.overlay.classList.remove("visible");
+      document.body.classList.remove("controls-visible");
     }, this._autoHideMs);
   }
 
@@ -267,36 +286,36 @@ class VideoScreen {
 
   // ─── Back button ────────────────────────────────────────────────
   _initBackButton() {
-    this._addHandler(this.backBtn, 'click', () => {
+    this._addHandler(this.backBtn, "click", () => {
       this._callbacks.onBack?.();
     });
   }
 
   // ─── Fullscreen ─────────────────────────────────────────────────
   async toggleFullscreen() {
-    const isFs = await window.novaAPI.invoke('nova:window-is-fullscreen');
-    window.novaAPI.send('nova:window-set-fullscreen', !isFs);
+    const isFs = await window.novaAPI.invoke("nova:window-is-fullscreen");
+    window.novaAPI.send("nova:window-set-fullscreen", !isFs);
     // Hide caption buttons when fullscreen
-    await window.novaAPI.invoke('nova:window-set-overlay-chrome', !isFs);
+    await window.novaAPI.invoke("nova:window-set-overlay-chrome", !isFs);
     // Re-report rect after fullscreen transition
     setTimeout(() => this.reportRect(), 300);
   }
 
   // ─── Engine event subscription ──────────────────────────────────
   subscribeEngineEvents(onTime, onState, onEnd, onError) {
-    return window.novaAPI.on('nova:engine-event', (event) => {
+    return window.novaAPI.on("nova:engine-event", (event) => {
       if (!event) return;
       switch (event.type) {
-        case 'time':
+        case "time":
           onTime?.(event);
           break;
-        case 'state':
+        case "state":
           onState?.(event);
           break;
-        case 'end':
+        case "end":
           onEnd?.(event);
           break;
-        case 'error':
+        case "error":
           onError?.(event);
           break;
       }
@@ -307,11 +326,20 @@ class VideoScreen {
   subscribeFallbackEvents(onTime, onState, onEnd, onError) {
     if (!this.fallbackEl) return () => {};
     const handlers = [
-      { ev: 'timeupdate', fn: () => onTime?.({ time: this.fallbackEl.currentTime, duration: this.fallbackEl.duration, position: this.fallbackEl.currentTime / (this.fallbackEl.duration || 1) }) },
-      { ev: 'play', fn: () => onState?.({ state: 'playing' }) },
-      { ev: 'pause', fn: () => onState?.({ state: 'paused' }) },
-      { ev: 'ended', fn: () => onEnd?.({}) },
-      { ev: 'error', fn: () => onError?.({ message: 'HTML5 video error' }) }
+      {
+        ev: "timeupdate",
+        fn: () =>
+          onTime?.({
+            time: this.fallbackEl.currentTime,
+            duration: this.fallbackEl.duration,
+            position:
+              this.fallbackEl.currentTime / (this.fallbackEl.duration || 1),
+          }),
+      },
+      { ev: "play", fn: () => onState?.({ state: "playing" }) },
+      { ev: "pause", fn: () => onState?.({ state: "paused" }) },
+      { ev: "ended", fn: () => onEnd?.({}) },
+      { ev: "error", fn: () => onError?.({ message: "HTML5 video error" }) },
     ];
     for (const { ev, fn } of handlers) {
       this.fallbackEl.addEventListener(ev, fn);
@@ -327,10 +355,14 @@ class VideoScreen {
   // ─── Engine control proxies ─────────────────────────────────────
   async enginePlay() {
     if (this._useFallback) {
-      try { await this.fallbackEl.play(); return { ok: true }; }
-      catch (e) { return { ok: false, error: e.message }; }
+      try {
+        await this.fallbackEl.play();
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
     }
-    return window.novaAPI.invoke('nova:engine-play');
+    return window.novaAPI.invoke("nova:engine-play");
   }
 
   async enginePause() {
@@ -338,7 +370,7 @@ class VideoScreen {
       this.fallbackEl.pause();
       return { ok: true };
     }
-    return window.novaAPI.invoke('nova:engine-pause');
+    return window.novaAPI.invoke("nova:engine-pause");
   }
 
   async engineToggle() {
@@ -346,7 +378,7 @@ class VideoScreen {
       if (this.fallbackEl.paused) return this.enginePlay();
       return this.enginePause();
     }
-    return window.novaAPI.invoke('nova:engine-toggle');
+    return window.novaAPI.invoke("nova:engine-toggle");
   }
 
   async engineSeek(timeSec) {
@@ -354,7 +386,7 @@ class VideoScreen {
       this.fallbackEl.currentTime = timeSec;
       return { ok: true };
     }
-    return window.novaAPI.invoke('nova:engine-seek', timeSec);
+    return window.novaAPI.invoke("nova:engine-seek", timeSec);
   }
 
   async engineSetVolume(vol) {
@@ -362,7 +394,7 @@ class VideoScreen {
       this.fallbackEl.volume = vol;
       return { ok: true };
     }
-    return window.novaAPI.invoke('nova:engine-volume', vol);
+    return window.novaAPI.invoke("nova:engine-volume", vol);
   }
 
   async engineSetRate(rate) {
@@ -370,12 +402,13 @@ class VideoScreen {
       this.fallbackEl.playbackRate = rate;
       return { ok: true };
     }
-    return window.novaAPI.invoke('nova:engine-rate', rate);
+    return window.novaAPI.invoke("nova:engine-rate", rate);
   }
 
   async engineSetAudioTrack(id) {
-    if (this._useFallback) return { ok: false, error: 'Not supported in fallback' };
-    return window.novaAPI.invoke('nova:engine-audio-track', id);
+    if (this._useFallback)
+      return { ok: false, error: "Not supported in fallback" };
+    return window.novaAPI.invoke("nova:engine-audio-track", id);
   }
 
   async engineSetSubtitleTrack(id) {
@@ -383,17 +416,19 @@ class VideoScreen {
       // Toggle native <track> elements if any
       return { ok: true };
     }
-    return window.novaAPI.invoke('nova:engine-subtitle-track', id);
+    return window.novaAPI.invoke("nova:engine-subtitle-track", id);
   }
 
   async engineSetChapter(ch) {
-    if (this._useFallback) return { ok: false, error: 'Not supported in fallback' };
-    return window.novaAPI.invoke('nova:engine-chapter', ch);
+    if (this._useFallback)
+      return { ok: false, error: "Not supported in fallback" };
+    return window.novaAPI.invoke("nova:engine-chapter", ch);
   }
 
   async engineGetTracks() {
-    if (this._useFallback) return { audio: [], subtitles: [], chapters: 0, currentChapter: 0 };
-    return window.novaAPI.invoke('nova:engine-tracks');
+    if (this._useFallback)
+      return { audio: [], subtitles: [], chapters: 0, currentChapter: 0 };
+    return window.novaAPI.invoke("nova:engine-tracks");
   }
 
   // ─── Cleanup ────────────────────────────────────────────────────
@@ -404,7 +439,9 @@ class VideoScreen {
 
   destroy() {
     for (const { el, ev, fn } of this._handlers) {
-      try { el.removeEventListener(ev, fn); } catch (_) {}
+      try {
+        el.removeEventListener(ev, fn);
+      } catch (_) {}
     }
     this._handlers = [];
     if (this._resizeObserver) {
@@ -422,7 +459,7 @@ class VideoScreen {
   }
 }
 
-if (typeof module !== 'undefined' && module.exports) {
+if (typeof module !== "undefined" && module.exports) {
   module.exports = VideoScreen;
 } else {
   window.VideoScreen = VideoScreen;
