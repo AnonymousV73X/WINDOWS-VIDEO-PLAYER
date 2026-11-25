@@ -30,10 +30,9 @@ check('electron');
 check('better-sqlite3');
 check('koffi');
 check('sharp');
-check('chokidar');
 
-// Optional (without these the app degrades gracefully)
-check('fluent-ffmpeg', true);
+// (chokidar and fluent-ffmpeg were removed in v2 — scanner uses fs.readdirSync
+// directly, and cache.js uses raw child_process.execFile for ffmpeg/ffprobe.)
 
 console.log('\nNote: koffi will load libvlc.dll / libvlc.so at runtime.');
 console.log('If libVLC is not installed, NovaPlay will fall back to HTML5 <video>.');

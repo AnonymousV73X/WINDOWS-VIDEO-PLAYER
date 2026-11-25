@@ -159,8 +159,8 @@ const VirtualList = {
         <div class="video-card-duration">0:00</div>
         <div class="video-card-play-overlay">
           <div class="video-card-play-button">
-            <!-- v2: NovaTune-style filled polygon (green circle with black play icon) -->
-            <svg viewBox="0 0 24 24" fill="#000"><polygon points="5,3 19,12 5,21"/></svg>
+            <!-- v2: NovaTune-style rounded play button -->
+            <svg viewBox="0 0 24 24" fill="#000"><path d="M6 4l12 8-12 8V4z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
           </div>
         </div>
       </div>

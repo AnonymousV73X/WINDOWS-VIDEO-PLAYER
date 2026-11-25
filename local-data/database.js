@@ -112,7 +112,29 @@ function close() {
 // ─── Query helpers ──────────────────────────────────────────────────
 function allVideos() {
   if (!open()) return [];
-  return db.prepare('SELECT * FROM videos ORDER BY dateAdded DESC').all();
+  const rows = db.prepare('SELECT * FROM videos ORDER BY dateAdded DESC').all();
+  // Filter out records whose file no longer exists on disk and clean them up
+  const valid = [];
+  const missingIds = [];
+  for (const row of rows) {
+    if (row.filePath && fs.existsSync(row.filePath)) {
+      valid.push(row);
+    } else {
+      missingIds.push(row.id);
+    }
+  }
+  if (missingIds.length > 0) {
+    const deleteStmt = db.prepare('DELETE FROM videos WHERE id = ?');
+    const deleteThumb = db.prepare('DELETE FROM thumbnails WHERE videoId = ?');
+    const tx = db.transaction((ids) => {
+      for (const id of ids) {
+        deleteStmt.run(id);
+        deleteThumb.run(id);
+      }
+    });
+    try { tx(missingIds); } catch (e) { console.warn('[db] prune missing failed:', e.message); }
+  }
+  return valid;
 }
 
 function getVideo(id) {
