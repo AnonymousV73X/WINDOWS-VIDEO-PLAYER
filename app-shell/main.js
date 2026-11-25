@@ -259,6 +259,12 @@ function createMainWindow() {
   });
   overlayWindow.loadFile(path.join(__dirname, "..", "ui", "overlay.html"));
   global.overlayWindow = overlayWindow;
+  overlayWindow.on("close", (e) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      e.preventDefault();
+      mainWindow.webContents.send("nova:overlay-back");
+    }
+  });
   registerIPCHandlers.setOverlayWindow(overlayWindow);
 
   const syncOverlayBounds = () => {
