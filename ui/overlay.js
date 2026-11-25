@@ -8,25 +8,27 @@
  * All engine calls are forwarded via nova:overlay-* IPC channels.
  */
 
-const root = document.getElementById('overlay-root');
+const root = document.getElementById("overlay-root");
 let _visible = false;
-let _time = 0, _duration = 0, _isPlaying = false;
+let _time = 0,
+  _duration = 0,
+  _isPlaying = false;
 let _volume = 80;
 let _isDraggingProgress = false;
 let _isDraggingVolume = false;
 let _autoHideTimer = null;
 let _autoHideMs = 2500;
-let _accentColor = '#FF8800';
+let _accentColor = "#FF8800";
 
 // ─── Auto-hide ────────────────────────────────────────────────────────
 function showControls() {
   if (!_visible) return;
-  root.classList.remove('hidden');
+  root.classList.remove("hidden");
   resetAutoHide();
 }
 
 function hideControls() {
-  root.classList.add('hidden');
+  root.classList.add("hidden");
 }
 
 function resetAutoHide() {
@@ -36,184 +38,231 @@ function resetAutoHide() {
   }, _autoHideMs);
 }
 
-document.addEventListener('mousemove', showControls);
-document.addEventListener('mousedown', showControls);
+document.addEventListener("mousemove", showControls);
+document.addEventListener("mousedown", showControls);
 
 // ─── Show/Hide overlay ───────────────────────────────────────────────
-window.novaAPI.on('nova:overlay-show', (data) => {
+window.novaAPI.on("nova:overlay-show", (data) => {
   _visible = true;
-  if (data && data.title) document.getElementById('ov-video-title').textContent = data.title;
+  if (data && data.title)
+    document.getElementById("ov-video-title").textContent = data.title;
   if (data && data.accentColor) {
-    document.documentElement.style.setProperty('--green', data.accentColor);
-    document.documentElement.style.setProperty('--accent', data.accentColor);
+    document.documentElement.style.setProperty("--green", data.accentColor);
+    document.documentElement.style.setProperty("--accent", data.accentColor);
   }
   showControls();
 });
 
-window.novaAPI.on('nova:overlay-hide', () => {
+window.novaAPI.on("nova:overlay-hide", () => {
   _visible = false;
   hideControls();
 });
 
 // ─── Engine events forwarded from main window ─────────────────────────
-window.novaAPI.on('nova:engine-event', (event) => {
+window.novaAPI.on("nova:engine-event", (event) => {
   if (!event) return;
-  if (event.type === 'time') {
+  if (event.type === "time") {
     _time = event.time || 0;
     _duration = event.duration || 0;
     updateProgress();
-  } else if (event.type === 'state') {
-    _isPlaying = event.state === 'playing';
+    if (event.state) {
+      const p =
+        event.state === "playing" ||
+        event.state === "buffering" ||
+        event.state === "opening";
+      if (p !== _isPlaying) {
+        _isPlaying = p;
+        updatePlayPauseIcon();
+      }
+    }
+  } else if (event.type === "state") {
+    _isPlaying = event.state === "playing";
     updatePlayPauseIcon();
   }
 });
 
 // ─── Progress bar ─────────────────────────────────────────────────────
-const progressWrap = document.getElementById('ov-progress-wrap');
-const progressFill = document.getElementById('ov-progress-fill');
-const progressHandle = document.getElementById('ov-progress-handle');
-const progressBubble = document.getElementById('ov-progress-bubble');
-const timeCurrent = document.getElementById('ov-time-current');
-const timeTotal = document.getElementById('ov-time-total');
+const progressWrap = document.getElementById("ov-progress-wrap");
+const progressFill = document.getElementById("ov-progress-fill");
+const progressHandle = document.getElementById("ov-progress-handle");
+const progressBubble = document.getElementById("ov-progress-bubble");
+const timeCurrent = document.getElementById("ov-time-current");
+const timeTotal = document.getElementById("ov-time-total");
 
 function formatTime(s) {
-  if (!isFinite(s) || s < 0) return '0:00';
+  if (!isFinite(s) || s < 0) return "0:00";
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = Math.floor(s % 60);
-  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
-  return `${m}:${String(sec).padStart(2,'0')}`;
+  if (h > 0)
+    return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
 function updateProgress() {
   const pct = _duration > 0 ? Math.min(1, _time / _duration) * 100 : 0;
-  progressFill.style.width = pct + '%';
-  progressHandle.style.left = pct + '%';
+  progressFill.style.width = pct + "%";
+  progressHandle.style.left = pct + "%";
   timeCurrent.textContent = formatTime(_time);
   timeTotal.textContent = formatTime(_duration);
 }
 
-progressWrap.addEventListener('mouseenter', () => {
-  progressWrap.addEventListener('mousemove', onProgressHover);
-  progressBubble.style.opacity = '1';
+progressWrap.addEventListener("mouseenter", () => {
+  progressWrap.addEventListener("mousemove", onProgressHover);
+  progressBubble.style.opacity = "1";
 });
-progressWrap.addEventListener('mouseleave', () => {
-  progressWrap.removeEventListener('mousemove', onProgressHover);
-  progressBubble.style.opacity = '0';
+progressWrap.addEventListener("mouseleave", () => {
+  progressWrap.removeEventListener("mousemove", onProgressHover);
+  progressBubble.style.opacity = "0";
 });
 
 function onProgressHover(e) {
   const rect = progressWrap.getBoundingClientRect();
   const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   progressBubble.textContent = formatTime(pct * _duration);
-  progressBubble.style.left = (pct * 100) + '%';
+  progressBubble.style.left = pct * 100 + "%";
 }
 
-progressWrap.addEventListener('mousedown', (e) => {
+progressWrap.addEventListener("mousedown", (e) => {
   _isDraggingProgress = true;
-  progressWrap.classList.add('dragging');
+  progressWrap.classList.add("dragging");
   seek(e);
   const onMove = (e) => seek(e);
   const onUp = () => {
     _isDraggingProgress = false;
-    progressWrap.classList.remove('dragging');
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
+    progressWrap.classList.remove("dragging");
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
     resetAutoHide();
   };
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup", onUp);
 });
 
 function seek(e) {
   const rect = progressWrap.getBoundingClientRect();
   const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   const time = pct * _duration;
-  window.novaAPI.send('nova:overlay-seek', time);
+  window.novaAPI.send("nova:overlay-seek", time);
 }
 
 // ─── Volume ───────────────────────────────────────────────────────────
-const volumeWrap = document.getElementById('ov-volume-wrap');
-const volumeFill = document.getElementById('ov-volume-fill');
-const volumeHandle = document.getElementById('ov-volume-handle');
-const volumeBtn = document.getElementById('ov-volume-btn');
+const volumeWrap = document.getElementById("ov-volume-wrap");
+const volumeFill = document.getElementById("ov-volume-fill");
+const volumeHandle = document.getElementById("ov-volume-handle");
+const volumeBtn = document.getElementById("ov-volume-btn");
 
-volumeWrap.addEventListener('mousedown', (e) => {
+volumeWrap.addEventListener("mousedown", (e) => {
   _isDraggingVolume = true;
   setVolume(e);
   const onMove = (e) => setVolume(e);
   const onUp = () => {
     _isDraggingVolume = false;
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
     resetAutoHide();
   };
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
+  document.addEventListener("mousemove", onMove);
+  document.addEventListener("mouseup", onUp);
 });
 
 function setVolume(e) {
   const rect = volumeWrap.getBoundingClientRect();
   const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   _volume = pct * 100;
-  volumeFill.style.width = (_volume) + '%';
-  volumeHandle.style.left = (_volume) + '%';
-  window.novaAPI.send('nova:overlay-volume', _volume / 100);
+  volumeFill.style.width = _volume + "%";
+  volumeHandle.style.left = _volume + "%";
+  window.novaAPI.send("nova:overlay-volume", _volume / 100);
 }
 
-volumeBtn.addEventListener('click', () => {
-  window.novaAPI.send('nova:overlay-mute');
+volumeBtn.addEventListener("click", () => {
+  window.novaAPI.send("nova:overlay-mute");
 });
 
 // ─── Transport ────────────────────────────────────────────────────────
-const playPauseBtn = document.getElementById('ov-play-pause-btn');
-const playPauseIcon = document.getElementById('ov-play-pause-icon');
-const prevBtn = document.getElementById('ov-prev-btn');
-const nextBtn = document.getElementById('ov-next-btn');
-const shuffleBtn = document.getElementById('ov-shuffle-btn');
-const repeatBtn = document.getElementById('ov-repeat-btn');
-const fullscreenBtn = document.getElementById('ov-fullscreen-btn');
-const speedPill = document.getElementById('ov-speed-pill');
+const playPauseBtn = document.getElementById("ov-play-pause-btn");
+const playPauseIcon = document.getElementById("ov-play-pause-icon");
+const prevBtn = document.getElementById("ov-prev-btn");
+const nextBtn = document.getElementById("ov-next-btn");
+const shuffleBtn = document.getElementById("ov-shuffle-btn");
+const repeatBtn = document.getElementById("ov-repeat-btn");
+const fullscreenBtn = document.getElementById("ov-fullscreen-btn");
+const speedPill = document.getElementById("ov-speed-pill");
 
-const PLAY_PATH = 'M6 4l12 8-12 8V4z';
-const PAUSE_PATH = 'M6 19V5M18 19V5';
+const PLAY_PATH = "M6 4l12 8-12 8V4z";
+const PAUSE_PATH = "M6 19V5M18 19V5";
 
 function updatePlayPauseIcon() {
-  const path = playPauseIcon.querySelector('path') || playPauseIcon;
+  const path = playPauseIcon.querySelector("path") || playPauseIcon;
   if (_isPlaying) {
-    playPauseIcon.innerHTML = '<rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/>';
+    playPauseIcon.innerHTML =
+      '<rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/>';
   } else {
-    playPauseIcon.innerHTML = '<path d="M6 4l12 8-12 8V4z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+    playPauseIcon.innerHTML =
+      '<path d="M6 4l12 8-12 8V4z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
   }
 }
 
-playPauseBtn.addEventListener('click', () => window.novaAPI.send('nova:overlay-toggle'));
-prevBtn.addEventListener('click', () => window.novaAPI.send('nova:overlay-prev'));
-nextBtn.addEventListener('click', () => window.novaAPI.send('nova:overlay-next'));
-shuffleBtn.addEventListener('click', () => window.novaAPI.send('nova:overlay-shuffle'));
-repeatBtn.addEventListener('click', () => window.novaAPI.send('nova:overlay-repeat'));
-fullscreenBtn.addEventListener('click', () => window.novaAPI.send('nova:overlay-fullscreen'));
+playPauseBtn.addEventListener("click", () => {
+  _isPlaying = !_isPlaying;
+  updatePlayPauseIcon();
+  window.novaAPI.send("nova:overlay-toggle");
+});
+window.novaAPI.on("nova:overlay-show", () => updatePlayPauseIcon());
+prevBtn.addEventListener("click", () =>
+  window.novaAPI.send("nova:overlay-prev"),
+);
+nextBtn.addEventListener("click", () =>
+  window.novaAPI.send("nova:overlay-next"),
+);
+shuffleBtn.addEventListener("click", () =>
+  window.novaAPI.send("nova:overlay-shuffle"),
+);
+repeatBtn.addEventListener("click", () =>
+  window.novaAPI.send("nova:overlay-repeat"),
+);
+fullscreenBtn.addEventListener("click", () =>
+  window.novaAPI.send("nova:overlay-fullscreen"),
+);
 
 let _speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 let _speedIdx = 3;
-speedPill.addEventListener('click', () => {
+speedPill.addEventListener("click", () => {
   _speedIdx = (_speedIdx + 1) % _speeds.length;
   const rate = _speeds[_speedIdx];
-  speedPill.textContent = rate + 'x';
-  window.novaAPI.send('nova:overlay-rate', rate);
+  speedPill.textContent = rate + "x";
+  window.novaAPI.send("nova:overlay-rate", rate);
 });
 
 // ─── Back button ──────────────────────────────────────────────────────
-document.getElementById('ov-back-btn').addEventListener('click', () => {
-  window.novaAPI.send('nova:overlay-back');
+document.getElementById("ov-back-btn").addEventListener("click", () => {
+  window.novaAPI.send("nova:overlay-back");
 });
 
 // ─── Action buttons ───────────────────────────────────────────────────
-document.getElementById('ov-audio-tracks').addEventListener('click', () => window.novaAPI.send('nova:overlay-action', 'audio'));
-document.getElementById('ov-subtitle-tracks').addEventListener('click', () => window.novaAPI.send('nova:overlay-action', 'subtitle'));
-document.getElementById('ov-chapters').addEventListener('click', () => window.novaAPI.send('nova:overlay-action', 'chapters'));
+document
+  .getElementById("ov-audio-tracks")
+  .addEventListener("click", () =>
+    window.novaAPI.send("nova:overlay-action", "audio"),
+  );
+document
+  .getElementById("ov-subtitle-tracks")
+  .addEventListener("click", () =>
+    window.novaAPI.send("nova:overlay-action", "subtitle"),
+  );
+document
+  .getElementById("ov-chapters")
+  .addEventListener("click", () =>
+    window.novaAPI.send("nova:overlay-action", "chapters"),
+  );
 
 // ─── Window controls ─────────────────────────────────────────────────
-document.getElementById('ov-minimize').addEventListener('click', () => window.novaAPI.send('nova:window-minimize'));
-document.getElementById('ov-maximize').addEventListener('click', () => window.novaAPI.send('nova:window-maximize'));
-document.getElementById('ov-close').addEventListener('click', () => window.novaAPI.send('nova:window-close'));
+document
+  .getElementById("ov-minimize")
+  .addEventListener("click", () => window.novaAPI.send("nova:window-minimize"));
+document
+  .getElementById("ov-maximize")
+  .addEventListener("click", () => window.novaAPI.send("nova:window-maximize"));
+document
+  .getElementById("ov-close")
+  .addEventListener("click", () => window.novaAPI.send("nova:window-close"));
