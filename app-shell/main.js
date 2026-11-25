@@ -260,7 +260,7 @@ function createMainWindow() {
   overlayWindow.loadFile(path.join(__dirname, "..", "ui", "overlay.html"));
   global.overlayWindow = overlayWindow;
   overlayWindow.on("close", (e) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
+    if (!global.__novaClosing && mainWindow && !mainWindow.isDestroyed()) {
       e.preventDefault();
       mainWindow.webContents.send("nova:overlay-back");
     }
@@ -344,6 +344,7 @@ function createMainWindow() {
   setTimeout(() => _showWindow("5s-hard-fallback"), 5000);
 
   mainWindow.on("close", () => {
+    global.__novaClosing = true;
     try {
       videoEngine?.destroy();
     } catch (_) {}
