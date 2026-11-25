@@ -325,37 +325,41 @@ function readTrackDescription(headPtr, currentId) {
   if (!headPtr) return [];
   const result = [];
   try {
-    const TrackDesc = koffi.struct("libvlc_track_description_t", {
-      i_id: "int32",
-      _pad: koffi.array("char", 4),
-      psz_name: koffi.pointer("char"),
-      p_next: koffi.pointer("libvlc_track_description_t"),
-    });
+    // libvlc_track_description_t (x64): int i_id @0, char *psz_name @8, next @16
     let p = headPtr;
     let guard = 0;
-    while (p && !p.isNull?.() && guard < 100) {
-      const node = koffi.decode(p, TrackDesc);
+    while (p && guard < 100) {
+      const id = koffi.decode(p, 0, "int32");
+      const namePtr = koffi.decode(p, 8, "void *");
       let name = "";
-      if (node.psz_name) {
+      if (namePtr) {
         try {
-          const buf = koffi.decode(node.psz_name, koffi.array("char", 256));
-          name = Buffer.from(buf).toString("utf-8").split("\0")[0];
+          name = koffi.decode(namePtr, "char", -1);
         } catch (_) {
-          name = "Track " + node.i_id;
+          try {
+            const buf = koffi.decode(namePtr, koffi.array("char", 256));
+            name = (
+              typeof buf === "string" ? buf : Buffer.from(buf).toString("utf-8")
+            ).split("\0")[0];
+          } catch (_) {
+            name = "Track " + id;
+          }
         }
       }
       result.push({
-        id: node.i_id,
-        name,
-        selected: node.i_id === currentId,
+        id,
+        name: name || "Track " + id,
+        selected: id === currentId,
       });
-      if (!node.p_next || node.p_next.isNull?.()) break;
-      p = node.p_next;
+      p = koffi.decode(p, 16, "void *");
       guard++;
     }
   } catch (err) {
     console.warn("[user32] track description walk failed:", err.message);
   }
+  try {
+    require("./VlcBinding").load().libvlc_track_description_release(headPtr);
+  } catch (_) {}
   return result;
 }
 
