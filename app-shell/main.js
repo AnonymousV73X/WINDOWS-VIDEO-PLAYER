@@ -21,71 +21,87 @@ const {
   shell,
   dialog,
   protocol,
-  net
-} = require('electron');
+  net,
+} = require("electron");
 
 // ─── File Logger ───────────────────────────────────────────────────
 // First thing initialised — captures every log line of the app lifecycle.
-const { initFileLogger, closeFileLogger } = require('./fileLogger');
+const { initFileLogger, closeFileLogger } = require("./fileLogger");
 initFileLogger();
 
 // ─── Crash Safety Net ───────────────────────────────────────────────
-const os = require('os');
-const fsSafety = require('fs');
-const pathSafety = require('path');
-const _crashLogPath = pathSafety.join(os.tmpdir(), 'novaplay-crash.log');
+const os = require("os");
+const fsSafety = require("fs");
+const pathSafety = require("path");
+const _crashLogPath = pathSafety.join(os.tmpdir(), "novaplay-crash.log");
 let _inFatal = false;
 function _logFatal(label, err) {
   // Guard against EPIPE re-entrancy (e.g. dying single-instance writing to broken stdout)
   if (_inFatal) return;
-  if (err && (err.code === 'EPIPE' || err.errno === -4047)) return;
+  if (err && (err.code === "EPIPE" || err.errno === -4047)) return;
   _inFatal = true;
   try {
     fsSafety.appendFileSync(
       _crashLogPath,
-      `[${new Date().toISOString()}] ${label}: ${err && err.stack ? err.stack : err}\n`
+      `[${new Date().toISOString()}] ${label}: ${err && err.stack ? err.stack : err}\n`,
     );
   } catch (_) {}
-  try { console.error(label, err); } catch (_) {}
+  try {
+    console.error(label, err);
+  } catch (_) {}
   _inFatal = false;
 }
-process.on('uncaughtException', (err) => _logFatal('uncaughtException', err));
-process.on('unhandledRejection', (err) => _logFatal('unhandledRejection', err));
+process.on("uncaughtException", (err) => _logFatal("uncaughtException", err));
+process.on("unhandledRejection", (err) => _logFatal("unhandledRejection", err));
 // Suppress EPIPE on stdout/stderr so a broken pipe on the single-instance loser
 // doesn't generate an endless flood of exceptions
-try { process.stdout.on('error', (e) => { if (e.code !== 'EPIPE') _logFatal('stdout error', e); }); } catch (_) {}
-try { process.stderr.on('error', (e) => { if (e.code !== 'EPIPE') _logFatal('stderr error', e); }); } catch (_) {}
+try {
+  process.stdout.on("error", (e) => {
+    if (e.code !== "EPIPE") _logFatal("stdout error", e);
+  });
+} catch (_) {}
+try {
+  process.stderr.on("error", (e) => {
+    if (e.code !== "EPIPE") _logFatal("stderr error", e);
+  });
+} catch (_) {}
 
-const path = require('path');
-const fs = require('fs');
-const WindowStateManager = require('./windowManager');
-const registerIPCHandlers = require('./ipc');
-const VideoEngine = require('../video-engine/VideoEngine');
+const path = require("path");
+const fs = require("fs");
+const WindowStateManager = require("./windowManager");
+const registerIPCHandlers = require("./ipc");
+const VideoEngine = require("../video-engine/VideoEngine");
 
 // ─── Chromium Flags ─────────────────────────────────────────────────
 // Hardware-accelerated video decoding + smooth scrolling.
-app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-app.commandLine.appendSwitch('disable-features', 'BackgroundTracing,PaintHolding');
-app.commandLine.appendSwitch('enable-features', 'PlatformHEVCEncoderSupport,HardwareMediaKeyHandling');
-app.commandLine.appendSwitch('disk-cache-size', '268435456');
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+app.commandLine.appendSwitch(
+  "disable-features",
+  "BackgroundTracing,PaintHolding",
+);
+app.commandLine.appendSwitch(
+  "enable-features",
+  "PlatformHEVCEncoderSupport,HardwareMediaKeyHandling",
+);
+app.commandLine.appendSwitch("disk-cache-size", "268435456");
 
 // ─── MIME map for local video files ─────────────────────────────────
 const VIDEO_MIME = {
-  '.mp4':  'video/mp4',
-  '.mkv':  'video/x-matroska',
-  '.avi':  'video/x-msvideo',
-  '.mov':  'video/quicktime',
-  '.webm': 'video/webm',
-  '.flv':  'video/x-flv',
-  '.wmv':  'video/x-ms-wmv',
-  '.m4v':  'video/x-m4v',
-  '.mpg':  'video/mpeg',
-  '.mpeg': 'video/mpeg',
-  '.ts':   'video/mp2t',
-  '.m2ts': 'video/mp2t',
-  '.vob':  'video/dvd',
-  '.ogv':  'video/ogg',
-  '.3gp':  'video/3gpp'
+  ".mp4": "video/mp4",
+  ".mkv": "video/x-matroska",
+  ".avi": "video/x-msvideo",
+  ".mov": "video/quicktime",
+  ".webm": "video/webm",
+  ".flv": "video/x-flv",
+  ".wmv": "video/x-ms-wmv",
+  ".m4v": "video/x-m4v",
+  ".mpg": "video/mpeg",
+  ".mpeg": "video/mpeg",
+  ".ts": "video/mp2t",
+  ".m2ts": "video/mp2t",
+  ".vob": "video/dvd",
+  ".ogv": "video/ogg",
+  ".3gp": "video/3gpp",
 };
 
 // ─── Register nova-video:// protocol ────────────────────────────────
@@ -94,16 +110,16 @@ const VIDEO_MIME = {
 // directly via fs, so it doesn't use this protocol.
 protocol.registerSchemesAsPrivileged([
   {
-    scheme: 'nova-video',
+    scheme: "nova-video",
     privileges: {
       standard: true,
       secure: true,
       supportFetchAPI: true,
       stream: true,
       bypassCSP: true,
-      corsEnabled: true
-    }
-  }
+      corsEnabled: true,
+    },
+  },
 ]);
 
 // ─── Prevent multiple instances ─────────────────────────────────────
@@ -111,9 +127,9 @@ function parseFileFromArgv(argv) {
   if (!argv || !Array.isArray(argv)) return null;
   for (let i = 1; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg.startsWith('-')) continue;
+    if (arg.startsWith("-")) continue;
     const ext = path.extname(arg).toLowerCase();
-    const videoExtensions = Object.keys(VIDEO_MIME).map(e => e.toLowerCase());
+    const videoExtensions = Object.keys(VIDEO_MIME).map((e) => e.toLowerCase());
     if (videoExtensions.includes(ext)) {
       const fullPath = path.resolve(arg);
       if (fs.existsSync(fullPath)) return fullPath;
@@ -126,17 +142,19 @@ global.fileToPlayOnStartup = parseFileFromArgv(process.argv);
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
-  console.log('[single-instance] Another instance has the lock — quitting.');
+  console.log("[single-instance] Another instance has the lock — quitting.");
   app.quit();
 } else {
-  app.on('second-instance', (event, commandLine) => {
-    console.log('[single-instance] Second instance launched — focusing existing window.');
+  app.on("second-instance", (event, commandLine) => {
+    console.log(
+      "[single-instance] Second instance launched — focusing existing window.",
+    );
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
       const filePath = parseFileFromArgv(commandLine);
       if (filePath) {
-        mainWindow.webContents.send('player:play-file', filePath);
+        mainWindow.webContents.send("player:play-file", filePath);
       }
     } else {
       // Zombie process — force-exit so the new instance can acquire the lock.
@@ -147,19 +165,23 @@ if (!gotTheLock) {
 
 // ─── Force-quit safety net ──────────────────────────────────────────
 let _forceQuitTimer = null;
-app.on('before-quit', (event) => {
-  console.log('[quit] before-quit received — starting 3s force-exit timer.');
+app.on("before-quit", (event) => {
+  console.log("[quit] before-quit received — starting 3s force-exit timer.");
   if (_forceQuitTimer) return;
   _forceQuitTimer = setTimeout(() => {
-    console.warn('[quit] Force-exit timer fired — process.exit(0).');
-    try { closeFileLogger(); } catch (_) {}
+    console.warn("[quit] Force-exit timer fired — process.exit(0).");
+    try {
+      closeFileLogger();
+    } catch (_) {}
     process.exit(0);
   }, 3000);
 });
 
-app.on('will-quit', () => {
-  console.log('[quit] will-quit — flushing logger.');
-  try { closeFileLogger(); } catch (_) {}
+app.on("will-quit", () => {
+  console.log("[quit] will-quit — flushing logger.");
+  try {
+    closeFileLogger();
+  } catch (_) {}
 });
 
 // ─── Globals ────────────────────────────────────────────────────────
@@ -168,25 +190,26 @@ let overlayWindow = null;
 let videoEngine = null;
 
 // ─── Window Manager ─────────────────────────────────────────────────
-const windowState = new WindowStateManager('main', {
+const windowState = new WindowStateManager("main", {
   defaultWidth: 1440,
   defaultHeight: 810,
   minWidth: 720,
-  minHeight: 480
+  minHeight: 480,
 });
 
 // ─── Create Main Window ─────────────────────────────────────────────
 function createMainWindow() {
   const { x, y, width, height, isMaximized } = windowState.getState();
 
-  let initAccentColor = '#FF8800';  // VLC orange (default)
+  let initAccentColor = "#FF8800"; // VLC orange (default)
   try {
-    const dataDir = process.env.NODE_ENV === 'development'
-      ? path.join(__dirname, '..', 'data')
-      : (WindowStateManager.DATA_DIR || app.getPath('userData'));
-    const settingsPath = path.join(dataDir, 'settings.json');
+    const dataDir =
+      process.env.NODE_ENV === "development"
+        ? path.join(__dirname, "..", "data")
+        : WindowStateManager.DATA_DIR || app.getPath("userData");
+    const settingsPath = path.join(dataDir, "settings.json");
     if (fs.existsSync(settingsPath)) {
-      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+      const settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
       if (settings.accentColor) initAccentColor = settings.accentColor;
     }
   } catch (_) {}
@@ -199,19 +222,26 @@ function createMainWindow() {
     minWidth: 720,
     minHeight: 480,
     show: false,
-    backgroundColor: '#121212',
-    title: 'NovaPlay',
-    ...(process.platform === 'win32'
-      ? { titleBarStyle: 'hidden', titleBarOverlay: { color: 'rgba(0,0,0,0)', symbolColor: '#ffffff', height: 32 } }
-      : { frame: process.platform === 'darwin' }),
+    backgroundColor: "#121212",
+    title: "NovaPlay",
+    ...(process.platform === "win32"
+      ? {
+          titleBarStyle: "hidden",
+          titleBarOverlay: {
+            color: "rgba(0,0,0,0)",
+            symbolColor: "#ffffff",
+            height: 32,
+          },
+        }
+      : { frame: process.platform === "darwin" }),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false,
       webSecurity: true,
-      additionalArguments: [`--accent-color=${initAccentColor}`]
-    }
+      additionalArguments: [`--accent-color=${initAccentColor}`],
+    },
   });
 
   // Register IPC handlers — they need mainWindow for send-backs.
@@ -224,46 +254,64 @@ function createMainWindow() {
     parent: mainWindow,
     closable: false,
     transparent: true,
-    backgroundColor: '#00000000',
+    backgroundColor: "#00000000",
     frame: false,
     hasShadow: false,
     skipTaskbar: true,
     focusable: true,
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: false
-    }
+      sandbox: false,
+    },
   });
-  overlayWindow.loadFile(path.join(__dirname, '..', 'ui', 'overlay.html'));
+  overlayWindow.loadFile(path.join(__dirname, "..", "ui", "overlay.html"));
   global.overlayWindow = overlayWindow;
 
   registerIPCHandlers.setOverlayWindow(overlayWindow);
 
   const keepOverlayHiddenInLibrary = () => {
     if (global.__videoActive) return;
-    try { if (overlayWindow && !overlayWindow.isDestroyed()) { overlayWindow.setIgnoreMouseEvents(true); if (overlayWindow.isVisible()) overlayWindow.hide(); } } catch (_) {}
+    try {
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
+        overlayWindow.setIgnoreMouseEvents(true);
+        if (overlayWindow.isVisible()) overlayWindow.hide();
+      }
+    } catch (_) {}
   };
-  for (const ev of ['show', 'focus', 'restore', 'maximize', 'unmaximize', 'resize']) {
+  for (const ev of [
+    "show",
+    "focus",
+    "restore",
+    "maximize",
+    "unmaximize",
+    "resize",
+  ]) {
     mainWindow.on(ev, keepOverlayHiddenInLibrary);
   }
-  mainWindow.webContents.on('did-finish-load', keepOverlayHiddenInLibrary);
+  mainWindow.webContents.on("did-finish-load", keepOverlayHiddenInLibrary);
 
   const syncOverlayBounds = () => {
-    if (!mainWindow || mainWindow.isDestroyed() || !overlayWindow || overlayWindow.isDestroyed()) return;
+    if (
+      !mainWindow ||
+      mainWindow.isDestroyed() ||
+      !overlayWindow ||
+      overlayWindow.isDestroyed()
+    )
+      return;
     try {
       const bounds = mainWindow.getContentBounds();
       overlayWindow.setBounds(bounds);
     } catch (_) {}
   };
-  mainWindow.on('resize', syncOverlayBounds);
-  mainWindow.on('move', syncOverlayBounds);
-  mainWindow.on('maximize', syncOverlayBounds);
-  mainWindow.on('unmaximize', syncOverlayBounds);
-  mainWindow.on('enter-full-screen', syncOverlayBounds);
-  mainWindow.on('leave-full-screen', syncOverlayBounds);
+  mainWindow.on("resize", syncOverlayBounds);
+  mainWindow.on("move", syncOverlayBounds);
+  mainWindow.on("maximize", syncOverlayBounds);
+  mainWindow.on("unmaximize", syncOverlayBounds);
+  mainWindow.on("enter-full-screen", syncOverlayBounds);
+  mainWindow.on("leave-full-screen", syncOverlayBounds);
 
   // ─── Initialise the video engine BEFORE the renderer loads ────────
   // The native HWND is available the moment BrowserWindow is constructed,
@@ -276,17 +324,25 @@ function createMainWindow() {
     videoEngine.attachToWindow(mainWindow);
     global.videoEngine = videoEngine;
   } catch (err) {
-    console.error('[video-engine] Failed to attach — running in fallback mode:', err.message);
+    console.error(
+      "[video-engine] Failed to attach — running in fallback mode:",
+      err.message,
+    );
     global.videoEngine = null;
   }
 
   // Load renderer.
-  mainWindow.loadFile(path.join(__dirname, '..', 'ui', 'index.html'));
+  mainWindow.loadFile(path.join(__dirname, "..", "ui", "index.html"));
 
   // Mirror renderer console into our log file (useful when packaged).
-  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-    console.log(`[Renderer Console] ${message} (at ${path.basename(sourceId)}:${line})`);
-  });
+  mainWindow.webContents.on(
+    "console-message",
+    (event, level, message, line, sourceId) => {
+      console.log(
+        `[Renderer Console] ${message} (at ${path.basename(sourceId)}:${line})`,
+      );
+    },
+  );
 
   // ─── Multi-signal show() ──────────────────────────────────────────
   // Different GPU drivers take different paths to composite the first
@@ -298,49 +354,69 @@ function createMainWindow() {
     _windowShown = true;
     console.log(`[window] show() — triggered by ${reason}`);
     if (isMaximized !== false) {
-      try { mainWindow.maximize(); } catch (_) {}
+      try {
+        mainWindow.maximize();
+      } catch (_) {}
     }
     mainWindow.show();
   }
 
-  mainWindow.once('ready-to-show', () => _showWindow('ready-to-show'));
+  mainWindow.once("ready-to-show", () => _showWindow("ready-to-show"));
 
-  mainWindow.webContents.once('did-finish-load', () => {
-    setTimeout(() => _showWindow('did-finish-load+500ms'), 500);
+  mainWindow.webContents.once("did-finish-load", () => {
+    setTimeout(() => _showWindow("did-finish-load+500ms"), 500);
   });
 
-  setTimeout(() => _showWindow('5s-hard-fallback'), 5000);
+  setTimeout(() => _showWindow("5s-hard-fallback"), 5000);
 
   const quitNow = () => {
     if (global.__novaQuitting) return;
     global.__novaQuitting = true;
     global.__novaClosing = true;
-    try { windowState.saveState(mainWindow); } catch (_) {}
-    try { if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.destroy(); } catch (_) {}
-    try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide(); } catch (_) {}
-    try { closeFileLogger(); } catch (_) {}
+    try {
+      windowState.saveState(mainWindow);
+    } catch (_) {}
+    try {
+      if (overlayWindow && !overlayWindow.isDestroyed())
+        overlayWindow.destroy();
+    } catch (_) {}
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+    } catch (_) {}
+    try {
+      closeFileLogger();
+    } catch (_) {}
     // Skip libvlc teardown (can block); the OS reclaims everything.
     app.exit(0);
   };
   global.__quitNow = quitNow;
 
-  mainWindow.on('close', (e) => {
-    if (!global.__novaQuitting) { e.preventDefault(); quitNow(); return; }
+  mainWindow.on("close", (e) => {
+    if (!global.__novaQuitting) {
+      e.preventDefault();
+      quitNow();
+      return;
+    }
     global.__novaClosing = true;
-    try { if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.destroy(); } catch (_) {}
-    try { videoEngine?.destroy(); } catch (_) {}
+    try {
+      if (overlayWindow && !overlayWindow.isDestroyed())
+        overlayWindow.destroy();
+    } catch (_) {}
+    try {
+      videoEngine?.destroy();
+    } catch (_) {}
     windowState.saveState(mainWindow);
   });
 
-  mainWindow.on('closed', () => {
+  mainWindow.on("closed", () => {
     mainWindow = null;
     overlayWindow = null;
     global.overlayWindow = null;
     app.quit();
   });
 
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('file://')) {
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (!url.startsWith("file://")) {
       event.preventDefault();
       shell.openExternal(url);
     }
@@ -348,19 +424,22 @@ function createMainWindow() {
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
-    return { action: 'deny' };
+    return { action: "deny" };
   });
 
-  if (process.env.NODE_ENV === 'development' || process.argv.includes('--dev')) {
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+  if (
+    process.env.NODE_ENV === "development" ||
+    process.argv.includes("--dev")
+  ) {
+    mainWindow.webContents.openDevTools({ mode: "detach" });
   }
 }
 
 // ─── Helper: decode nova-video://local/ URL to file path ───────────
 function decodeNovaVideoLocalPath(url) {
-  const encoded = url.slice('nova-video://local/'.length);
+  const encoded = url.slice("nova-video://local/".length);
   let filePath = decodeURIComponent(encoded);
-  filePath = filePath.replace(/\\/g, '/');
+  filePath = filePath.replace(/\\/g, "/");
   if (/^\/[A-Za-z]:/.test(filePath)) filePath = filePath.slice(1);
   return filePath;
 }
@@ -371,18 +450,18 @@ function decodeNovaVideoLocalPath(url) {
 async function serveVideoFile(request, filePath) {
   try {
     const ext = path.extname(filePath).toLowerCase();
-    const mimeType = VIDEO_MIME[ext] || 'application/octet-stream';
+    const mimeType = VIDEO_MIME[ext] || "application/octet-stream";
     const stat = await fs.promises.stat(filePath);
     const fileSize = stat.size;
 
     const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, HEAD',
-      'Access-Control-Allow-Headers': 'Range'
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, HEAD",
+      "Access-Control-Allow-Headers": "Range",
     };
 
     const rangeHeader =
-      request.headers.get('Range') || request.headers.get('range');
+      request.headers.get("Range") || request.headers.get("range");
 
     if (rangeHeader) {
       const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
@@ -394,30 +473,37 @@ async function serveVideoFile(request, filePath) {
         if (start >= fileSize) {
           return new Response(null, {
             status: 416,
-            headers: { 'Content-Range': `bytes */${fileSize}` }
+            headers: { "Content-Range": `bytes */${fileSize}` },
           });
         }
 
         const chunkSize = clampedEnd - start + 1;
-        const nodeStream = fs.createReadStream(filePath, { start, end: clampedEnd });
+        const nodeStream = fs.createReadStream(filePath, {
+          start,
+          end: clampedEnd,
+        });
         const webStream = new ReadableStream({
           start(controller) {
-            nodeStream.on('data', (chunk) => controller.enqueue(new Uint8Array(chunk)));
-            nodeStream.on('end', () => controller.close());
-            nodeStream.on('error', (err) => controller.error(err));
+            nodeStream.on("data", (chunk) =>
+              controller.enqueue(new Uint8Array(chunk)),
+            );
+            nodeStream.on("end", () => controller.close());
+            nodeStream.on("error", (err) => controller.error(err));
           },
-          cancel() { nodeStream.destroy(); }
+          cancel() {
+            nodeStream.destroy();
+          },
         });
 
         return new Response(webStream, {
           status: 206,
           headers: {
             ...corsHeaders,
-            'Content-Type': mimeType,
-            'Content-Range': `bytes ${start}-${clampedEnd}/${fileSize}`,
-            'Content-Length': String(chunkSize),
-            'Accept-Ranges': 'bytes'
-          }
+            "Content-Type": mimeType,
+            "Content-Range": `bytes ${start}-${clampedEnd}/${fileSize}`,
+            "Content-Length": String(chunkSize),
+            "Accept-Ranges": "bytes",
+          },
         });
       }
     }
@@ -426,107 +512,127 @@ async function serveVideoFile(request, filePath) {
     const nodeStream = fs.createReadStream(filePath);
     const webStream = new ReadableStream({
       start(controller) {
-        nodeStream.on('data', (chunk) => controller.enqueue(new Uint8Array(chunk)));
-        nodeStream.on('end', () => controller.close());
-        nodeStream.on('error', (err) => controller.error(err));
+        nodeStream.on("data", (chunk) =>
+          controller.enqueue(new Uint8Array(chunk)),
+        );
+        nodeStream.on("end", () => controller.close());
+        nodeStream.on("error", (err) => controller.error(err));
       },
-      cancel() { nodeStream.destroy(); }
+      cancel() {
+        nodeStream.destroy();
+      },
     });
 
     return new Response(webStream, {
       status: 200,
       headers: {
         ...corsHeaders,
-        'Content-Type': mimeType,
-        'Content-Length': String(fileSize),
-        'Accept-Ranges': 'bytes'
-      }
+        "Content-Type": mimeType,
+        "Content-Length": String(fileSize),
+        "Accept-Ranges": "bytes",
+      },
     });
   } catch (err) {
-    console.error('[nova-video:local] serveVideoFile error:', err.message);
-    return new Response('Internal error', { status: 500 });
+    console.error("[nova-video:local] serveVideoFile error:", err.message);
+    return new Response("Internal error", { status: 500 });
   }
 }
 
 // ─── App Lifecycle ──────────────────────────────────────────────────
 app.whenReady().then(() => {
-  try { Menu.setApplicationMenu(null); } catch (err) {
-    _logFatal('Menu.setApplicationMenu failed', err);
+  try {
+    Menu.setApplicationMenu(null);
+  } catch (err) {
+    _logFatal("Menu.setApplicationMenu failed", err);
   }
 
   try {
-    if (process.platform === 'win32') {
-      app.setAppUserModelId('com.novaplay.player');
+    if (process.platform === "win32") {
+      app.setAppUserModelId("com.novaplay.player");
     }
   } catch (err) {
-    _logFatal('setAppUserModelId failed', err);
+    _logFatal("setAppUserModelId failed", err);
   }
 
   // ── nova-video:// protocol handler ──────────────────────────────
   try {
-    protocol.handle('nova-video', async (request) => {
+    protocol.handle("nova-video", async (request) => {
       const url = request.url;
       const corsHeaders = {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET',
-        'Access-Control-Allow-Headers': 'Range'
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET",
+        "Access-Control-Allow-Headers": "Range",
       };
 
       // nova-video://local/<encoded-path>
-      if (url.startsWith('nova-video://local/')) {
+      if (url.startsWith("nova-video://local/")) {
         const filePath = decodeNovaVideoLocalPath(url);
         if (!fs.existsSync(filePath)) {
-          return new Response('Not found', { status: 404, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } });
+          return new Response("Not found", {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "text/plain" },
+          });
         }
         return serveVideoFile(request, filePath);
       }
 
       // nova-video://thumb/<encoded-path>  → generated thumbnail PNG (cache-backed)
-      if (url.startsWith('nova-video://thumb/')) {
-        const encoded = url.slice('nova-video://thumb/'.length).split('?')[0];
-        const filePath = decodeURIComponent(encoded).replace(/\\/g, '/');
-        const normalized = /^\/[A-Za-z]:/.test(filePath) ? filePath.slice(1) : filePath;
+      if (url.startsWith("nova-video://thumb/")) {
+        const encoded = url.slice("nova-video://thumb/".length).split("?")[0];
+        const filePath = decodeURIComponent(encoded).replace(/\\/g, "/");
+        const normalized = /^\/[A-Za-z]:/.test(filePath)
+          ? filePath.slice(1)
+          : filePath;
         try {
-          const { getThumbnail } = require('../local-data/cache');
+          const { getThumbnail } = require("../local-data/cache");
           const thumbPath = await getThumbnail(normalized);
           if (!thumbPath) {
-            return new Response('No thumbnail', { status: 404, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } });
+            return new Response("No thumbnail", {
+              status: 404,
+              headers: { ...corsHeaders, "Content-Type": "text/plain" },
+            });
           }
           const buf = fs.readFileSync(thumbPath);
           return new Response(buf, {
             status: 200,
             headers: {
               ...corsHeaders,
-              'Content-Type': 'image/jpeg',
-              'Cache-Control': 'public, max-age=31536000, immutable'
-            }
+              "Content-Type": "image/jpeg",
+              "Cache-Control": "public, max-age=31536000, immutable",
+            },
           });
         } catch (err) {
-          console.error('[nova-video:thumb] error:', err.message);
-          return new Response('Thumbnail error', { status: 500, headers: { ...corsHeaders, 'Content-Type': 'text/plain' } });
+          console.error("[nova-video:thumb] error:", err.message);
+          return new Response("Thumbnail error", {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "text/plain" },
+          });
         }
       }
 
-      return new Response('Not found', { status: 404 });
+      return new Response("Not found", { status: 404 });
     });
   } catch (err) {
-    _logFatal('protocol.handle nova-video failed', err);
+    _logFatal("protocol.handle nova-video failed", err);
   }
 
   createMainWindow();
 
   // Forward startup file (file association)
   if (global.fileToPlayOnStartup && mainWindow) {
-    mainWindow.webContents.once('did-finish-load', () => {
-      mainWindow.webContents.send('player:play-file', global.fileToPlayOnStartup);
+    mainWindow.webContents.once("did-finish-load", () => {
+      mainWindow.webContents.send(
+        "player:play-file",
+        global.fileToPlayOnStartup,
+      );
     });
   }
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
 });
 
-app.on('activate', () => {
+app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
 });
