@@ -440,8 +440,8 @@ async function handleVideoEnded() {
   }
 }
 
-function handleBackToLibrary() {
-  videoScreen.hide();
+async function handleBackToLibrary() {
+  await videoScreen.hide();
   // Pause playback when leaving video screen
   state.isPlaying = false;
   // Re-show the mini now-playing bar if there's a loaded video
