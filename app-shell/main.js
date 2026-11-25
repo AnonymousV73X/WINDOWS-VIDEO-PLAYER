@@ -164,6 +164,7 @@ app.on('will-quit', () => {
 
 // ─── Globals ────────────────────────────────────────────────────────
 let mainWindow = null;
+let overlayWindow = null;
 let videoEngine = null;
 
 // ─── Window Manager ─────────────────────────────────────────────────
@@ -198,12 +199,8 @@ function createMainWindow() {
     minWidth: 720,
     minHeight: 480,
     show: false,
-    backgroundColor: '#121212',     // matches --bg (dark theme default)
+    backgroundColor: '#121212',
     title: 'NovaPlay',
-    titleBarStyle: 'hidden',
-    titleBarOverlay: process.platform === 'win32'
-      ? { color: 'rgba(0, 0, 0, 0)', symbolColor: 'rgba(0, 0, 0, 0)', height: 32 }
-      : undefined,
     frame: process.platform === 'darwin',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -217,6 +214,42 @@ function createMainWindow() {
 
   // Register IPC handlers — they need mainWindow for send-backs.
   registerIPCHandlers(mainWindow);
+
+  // ─── Create transparent overlay BrowserWindow for video controls ──
+  // Sits above the libVLC child HWND so HTML controls render cleanly
+  // over hardware-accelerated video.
+  overlayWindow = new BrowserWindow({
+    parent: mainWindow,
+    transparent: true,
+    frame: false,
+    hasShadow: false,
+    skipTaskbar: true,
+    focusable: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false
+    }
+  });
+  overlayWindow.loadFile(path.join(__dirname, '..', 'ui', 'overlay.html'));
+  global.overlayWindow = overlayWindow;
+  registerIPCHandlers.setOverlayWindow(overlayWindow);
+
+  const syncOverlayBounds = () => {
+    if (!mainWindow || mainWindow.isDestroyed() || !overlayWindow || overlayWindow.isDestroyed()) return;
+    try {
+      const bounds = mainWindow.getContentBounds();
+      overlayWindow.setBounds(bounds);
+    } catch (_) {}
+  };
+  mainWindow.on('resize', syncOverlayBounds);
+  mainWindow.on('move', syncOverlayBounds);
+  mainWindow.on('maximize', syncOverlayBounds);
+  mainWindow.on('unmaximize', syncOverlayBounds);
+  mainWindow.on('enter-full-screen', syncOverlayBounds);
+  mainWindow.on('leave-full-screen', syncOverlayBounds);
 
   // ─── Initialise the video engine BEFORE the renderer loads ────────
   // The native HWND is available the moment BrowserWindow is constructed,
@@ -266,11 +299,14 @@ function createMainWindow() {
 
   mainWindow.on('close', () => {
     try { videoEngine?.destroy(); } catch (_) {}
+    try { if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.destroy(); } catch (_) {}
     windowState.saveState(mainWindow);
   });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    overlayWindow = null;
+    global.overlayWindow = null;
   });
 
   mainWindow.webContents.on('will-navigate', (event, url) => {

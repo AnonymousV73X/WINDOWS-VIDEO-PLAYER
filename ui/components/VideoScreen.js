@@ -55,13 +55,19 @@ class VideoScreen {
 
   // ─── Show / Hide ────────────────────────────────────────────────
   show(video) {
+    document.body.classList.add('video-active');
     this._currentVideo = video;
     this._visible = true;
     this.screen.classList.add('active');
+    this.screen.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#000;display:flex;';
     this.titleEl.textContent = video.title || 'Untitled';
 
     // Tell the engine to show the child HWND
     window.novaAPI.send('nova:engine-set-video-visible', true);
+    window.novaAPI.send('nova:overlay-show', {
+      title: video.title || 'Untitled',
+      accentColor: getComputedStyle(document.documentElement).getPropertyValue('--green').trim() || '#FF8800'
+    });
 
     // Report rect after layout settles
     requestAnimationFrame(() => {
@@ -70,16 +76,16 @@ class VideoScreen {
 
     // Show controls initially
     this._showControls();
-
-    document.body.classList.add('video-active');
   }
 
   hide() {
     this._visible = false;
     this.screen.classList.remove('active');
+    this.screen.style.cssText = '';
 
     // Hide the child HWND so it doesn't show stale frames
     window.novaAPI.send('nova:engine-set-video-visible', false);
+    window.novaAPI.send('nova:overlay-hide');
 
     // Report zero rect so the child HWND gets hidden
     this._reportRectRaw({ x: 0, y: 0, width: 0, height: 0 });

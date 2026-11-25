@@ -12,7 +12,8 @@
     "build:portable": "electron-builder --win portable --config electron.config.js",
     "download-fonts": "node scripts/download-fonts.js",
     "make-icons": "node scripts/make_icons.js",
-    "postinstall": "node scripts/check-deps.js"
+    "postinstall": "node scripts/check-deps.js",
+    "zip": "node zip.js"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",

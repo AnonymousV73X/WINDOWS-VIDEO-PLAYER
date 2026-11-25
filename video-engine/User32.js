@@ -228,8 +228,10 @@ function syncPosition(hwnd, rect) {
 function bringToTop(hwnd) {
   const u = load();
   try {
-    // HWND_TOPMOST = (HWND)-1 = 0xFFFFFFFFFFFFFFFF as uint64 BigInt
-    return u.SetWindowPos(hwnd, 0xFFFFFFFFFFFFFFFFn, 0, 0, 0, 0,
+    // HWND_TOP (0n) keeps VLC above Chromium's GPU compositor surface so the
+    // video is visible. WS_EX_TRANSPARENT (set at creation) lets mouse events
+    // fall through to the HTML controls overlay beneath.
+    return u.SetWindowPos(hwnd, 0n, 0, 0, 0, 0,
       u.SWP_NOMOVE | u.SWP_NOSIZE | u.SWP_NOACTIVATE | u.SWP_SHOWWINDOW);
   } catch (err) {
     console.warn('[user32] bringToTop failed:', err.message);

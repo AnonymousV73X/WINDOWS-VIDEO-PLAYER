@@ -18,6 +18,28 @@ const { scanFolder, quickMetadata } = require('../local-data/fileScanner');
 const { probeMetadata, getThumbnail } = require('../local-data/cache');
 
 let _mainWindow = null;
+let _overlayWindow = null;
+
+/** Called by main.js after creating the overlay window */
+function setOverlayWindow(win) {
+  _overlayWindow = win;
+}
+
+function sendToOverlay(channel, ...args) {
+  try {
+    if (_overlayWindow && !_overlayWindow.isDestroyed()) {
+      _overlayWindow.webContents.send(channel, ...args);
+    }
+  } catch (_) {}
+}
+
+function sendToMain(channel, ...args) {
+  try {
+    if (_mainWindow && !_mainWindow.isDestroyed()) {
+      _mainWindow.webContents.send(channel, ...args);
+    }
+  } catch (_) {}
+}
 
 function registerIPCHandlers(mainWindow) {
   _mainWindow = mainWindow;
@@ -268,6 +290,47 @@ function registerIPCHandlers(mainWindow) {
   ipcMain.handle('nova:settings-set', (event, { key, value }) => settings.set(key, value));
   ipcMain.handle('nova:settings-reset', () => settings.reset());
 
+  // ─── Overlay window IPC relay ───────────────────────────────────
+  // The overlay BrowserWindow sends nova:overlay-* messages; we relay
+  // them to the main window renderer which owns the engine + app state.
+  const overlayRelays = [
+    'nova:overlay-toggle', 'nova:overlay-prev', 'nova:overlay-next',
+    'nova:overlay-shuffle', 'nova:overlay-repeat', 'nova:overlay-fullscreen',
+    'nova:overlay-back', 'nova:overlay-mute',
+  ];
+  for (const ch of overlayRelays) {
+    ipcMain.on(ch, () => sendToMain(ch));
+  }
+  ipcMain.on('nova:overlay-seek', (_e, time) => {
+    const eng = global.videoEngine;
+    if (eng) eng.seek(time);
+  });
+  ipcMain.on('nova:overlay-volume', (_e, vol) => {
+    const eng = global.videoEngine;
+    if (eng) eng.setVolume(vol);
+  });
+  ipcMain.on('nova:overlay-rate', (_e, rate) => {
+    const eng = global.videoEngine;
+    if (eng) eng.setRate(rate);
+    sendToMain('nova:overlay-rate', rate);
+  });
+  ipcMain.on('nova:overlay-action', (_e, type) => sendToMain('nova:overlay-action', type));
+  ipcMain.on('nova:overlay-show', (_e, data) => {
+    if (_overlayWindow && !_overlayWindow.isDestroyed() && _mainWindow && !_mainWindow.isDestroyed()) {
+      try {
+        _overlayWindow.setBounds(_mainWindow.getContentBounds());
+        _overlayWindow.showInactive();
+      } catch (_) {}
+      sendToOverlay('nova:overlay-show', data || {});
+    }
+  });
+  ipcMain.on('nova:overlay-hide', () => {
+    sendToOverlay('nova:overlay-hide');
+    if (_overlayWindow && !_overlayWindow.isDestroyed()) {
+      try { _overlayWindow.hide(); } catch (_) {}
+    }
+  });
+
   // ─── Video Engine ───────────────────────────────────────────────
   ipcMain.handle('nova:engine-available', () => {
     const eng = global.videoEngine;
@@ -374,3 +437,5 @@ function registerIPCHandlers(mainWindow) {
 
 module.exports = registerIPCHandlers;
 module.exports.getMainWindow = () => _mainWindow;
+module.exports.setOverlayWindow = setOverlayWindow;
+module.exports.sendToOverlay = sendToOverlay;

@@ -32,10 +32,10 @@
  * protocol (which handles HTTP range requests for local files).
  */
 
-const path = require('path');
-const { BrowserWindow } = require('electron');
-const vlc = require('./VlcBinding');
-const User32 = require('./User32');
+const path = require("path");
+const { BrowserWindow } = require("electron");
+const vlc = require("./VlcBinding");
+const User32 = require("./User32");
 
 class VideoEngine {
   constructor() {
@@ -43,13 +43,13 @@ class VideoEngine {
     try {
       const vlcPath = vlc.getVlcDir();
       if (vlcPath) {
-        const pluginsPath = path.join(vlcPath, 'plugins');
+        const pluginsPath = path.join(vlcPath, "plugins");
         process.env.VLC_PLUGIN_PATH = pluginsPath;
-        const sep = process.platform === 'win32' ? ';' : ':';
+        const sep = process.platform === "win32" ? ";" : ":";
         if (!process.env.PATH.includes(vlcPath)) {
           process.env.PATH = vlcPath + sep + process.env.PATH;
         }
-        console.log('[engine] VLC_PLUGIN_PATH =', pluginsPath);
+        console.log("[engine] VLC_PLUGIN_PATH =", pluginsPath);
         vlc.resetCache();
       }
     } catch (_) {}
@@ -69,6 +69,7 @@ class VideoEngine {
     this._rectSyncTimer = null;
     this._lastChildSyncAt = 0;
     this._vlcInstance = null;
+    this._videoWanted = false;
 
     let _loadError = null;
     try {
@@ -78,8 +79,10 @@ class VideoEngine {
       _loadError = err;
     }
     if (!this._available) {
-      console.warn('[engine] libVLC unavailable — running in HTML5 fallback mode');
-      if (_loadError) console.warn('[engine] load error:', _loadError.message);
+      console.warn(
+        "[engine] libVLC unavailable — running in HTML5 fallback mode",
+      );
+      if (_loadError) console.warn("[engine] load error:", _loadError.message);
       return;
     }
 
@@ -94,19 +97,19 @@ class VideoEngine {
       // Important: --avcodec-hw=any enables DXVA2/D3D11 hardware decoding on
       // Windows, which is essential for smooth 10-bit x265 playback.
       const argv = [
-        '--no-video-title-show',    // don't overlay filename on video
-        '--no-stats',                // don't compute stats (perf)
-        '--no-osd',                  // no on-screen-display
-        '--no-network',              // disable network modules (offline-first)
-        '--rtsp-tcp',                // prefer TCP for RTSP if it ever loads network
-        '--avcodec-hw=any',          // hardware acceleration (DXVA2/D3D11 on Win)
-        '--no-snapshot-preview',     // don't show snapshot preview
-        '--deinterlace=0',           // disable auto-deinterlace (let user choose)
-        '--no-skins2',               // no skins2 module
-        '--no-qt',                   // no Qt interface
-        '--no-hotkeys',              // no global hotkeys
-        '--no-media-library',        // no media library
-        '--no-playlist-tree'         // flat playlist
+        "--no-video-title-show", // don't overlay filename on video
+        "--no-stats", // don't compute stats (perf)
+        "--no-osd", // no on-screen-display
+        "--no-network", // disable network modules (offline-first)
+        "--rtsp-tcp", // prefer TCP for RTSP if it ever loads network
+        "--avcodec-hw=any", // hardware acceleration (DXVA2/D3D11 on Win)
+        "--no-snapshot-preview", // don't show snapshot preview
+        "--deinterlace=0", // disable auto-deinterlace (let user choose)
+        "--no-skins2", // no skins2 module
+        "--no-qt", // no Qt interface
+        "--no-hotkeys", // no global hotkeys
+        "--no-media-library", // no media library
+        "--no-playlist-tree", // flat playlist
       ];
 
       try {
@@ -120,22 +123,25 @@ class VideoEngine {
       }
       if (!this._vlcInstance) {
         throw new Error(
-          'libvlc_new returned null — VLC_PLUGIN_PATH=' + (process.env.VLC_PLUGIN_PATH || 'unset')
+          "libvlc_new returned null — VLC_PLUGIN_PATH=" +
+            (process.env.VLC_PLUGIN_PATH || "unset"),
         );
       }
-      console.log('[engine] libVLC instance created OK');
+      console.log("[engine] libVLC instance created OK");
       try {
         const ver = v.libvlc_get_version();
-        console.log('[engine] libVLC version:', ver);
+        console.log("[engine] libVLC version:", ver);
       } catch (_) {}
     } catch (err) {
       this._available = false;
-      console.error('[engine] libvlc_new failed:', err.message);
+      console.error("[engine] libvlc_new failed:", err.message);
       return;
     }
   }
 
-  isAvailable() { return this._available; }
+  isAvailable() {
+    return this._available;
+  }
 
   /**
    * Attach to a BrowserWindow. Creates the child HWND and hooks window
@@ -145,8 +151,10 @@ class VideoEngine {
   attachToWindow(mainWindow) {
     this._mainWindow = mainWindow;
     if (!this._available) return;
-    if (process.platform !== 'win32') {
-      console.warn('[engine] HWND embedding is Windows-only — video will use HTML5 fallback');
+    if (process.platform !== "win32") {
+      console.warn(
+        "[engine] HWND embedding is Windows-only — video will use HTML5 fallback",
+      );
       return;
     }
 
@@ -154,29 +162,40 @@ class VideoEngine {
     // Electron returns the native HWND as a Node Buffer (raw pointer bytes).
     // We pass this Buffer directly to koffi (it marshals Buffer→void*).
     this._parentHwnd = mainWindow.getNativeWindowHandle();
-    console.log('[engine] parent HWND buffer length:', this._parentHwnd?.length);
+    console.log(
+      "[engine] parent HWND buffer length:",
+      this._parentHwnd?.length,
+    );
 
     // ─── Create the child HWND ────────────────────────────────────────
     try {
       this._childHwnd = User32.createChildWindow(this._parentHwnd);
-      console.log('[engine] child HWND created for libVLC output');
+      console.log("[engine] child HWND created for libVLC output");
     } catch (err) {
-      console.error('[engine] createChildWindow failed — video will not display:', err.message);
+      console.error(
+        "[engine] createChildWindow failed — video will not display:",
+        err.message,
+      );
       this._childHwnd = null;
     }
 
     // ─── Verify parentage (surface the v1 bug if it persists) ────────
-    if (this._childHwnd && !User32.isParentedTo(this._childHwnd, this._parentHwnd)) {
-      console.warn('[engine] child HWND is NOT parented to BrowserWindow — embedded video may fail');
+    if (
+      this._childHwnd &&
+      !User32.isParentedTo(this._childHwnd, this._parentHwnd)
+    ) {
+      console.warn(
+        "[engine] child HWND is NOT parented to BrowserWindow — embedded video may fail",
+      );
     }
 
     // ─── Hook window events to keep child HWND in sync ───────────────
     this._attachWindowEventHandlers(mainWindow);
 
     // ─── Listen for renderer-reported video-area rect updates ────────
-    const { ipcMain } = require('electron');
-    ipcMain.removeAllListeners('nova:video-rect');
-    ipcMain.on('nova:video-rect', (_event, rect) => {
+    const { ipcMain } = require("electron");
+    ipcMain.removeAllListeners("nova:video-rect");
+    ipcMain.on("nova:video-rect", (_event, rect) => {
       this._videoRect = rect || { x: 0, y: 0, width: 0, height: 0 };
       this._updateChildWindowPosition();
     });
@@ -202,26 +221,26 @@ class VideoEngine {
         // Ask renderer to re-report the rect (it may have changed)
         try {
           if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('nova:video-rect-request', {});
+            mainWindow.webContents.send("nova:video-rect-request", {});
           }
         } catch (_) {}
         // Also immediately re-sync with the last known rect (catches
         // pure window-move where the in-DOM rect hasn't actually changed
         // but the screen-space coordinates have).
         this._updateChildWindowPosition();
-      }, 16);  // ~60fps cap
+      }, 16); // ~60fps cap
     };
 
     const events = [
-      'resize',
-      'move',
-      'maximize',
-      'unmaximize',
-      'enter-full-screen',
-      'leave-full-screen',
-      'restore',
-      'show',
-      'hide'
+      "resize",
+      "move",
+      "maximize",
+      "unmaximize",
+      "enter-full-screen",
+      "leave-full-screen",
+      "restore",
+      "show",
+      "hide",
     ];
 
     for (const ev of events) {
@@ -235,28 +254,30 @@ class VideoEngine {
     // DPI scaling. We listen and trigger a re-sync.
     try {
       const dpiHandler = (_e, changedMetrics) => {
-        console.log('[engine] display-metrics-changed:', changedMetrics);
+        console.log("[engine] display-metrics-changed:", changedMetrics);
         scheduleSync();
         // Also re-assert topmost — DPI changes can reset z-order on some drivers
-        if (this._childHwnd) {
-          try { User32.bringToTop(this._childHwnd); } catch (_) {}
+        if (this._childHwnd && this._videoWanted) {
+          try {
+            User32.bringToTop(this._childHwnd);
+          } catch (_) {}
         }
       };
-      mainWindow.webContents.on('display-metrics-changed', dpiHandler);
+      mainWindow.webContents.on("display-metrics-changed", dpiHandler);
       this._windowEventHandlers.push({
-        event: 'display-metrics-changed',
+        event: "display-metrics-changed",
         handler: dpiHandler,
-        target: mainWindow.webContents
+        target: mainWindow.webContents,
       });
     } catch (_) {}
 
     // Window close — clean up child HWND before the parent disappears
     const closedHandler = () => {
-      console.log('[engine] main window closed — destroying child HWND');
+      console.log("[engine] main window closed — destroying child HWND");
       this.destroy();
     };
-    mainWindow.on('closed', closedHandler);
-    this._windowEventHandlers.push({ event: 'closed', handler: closedHandler });
+    mainWindow.on("closed", closedHandler);
+    this._windowEventHandlers.push({ event: "closed", handler: closedHandler });
   }
 
   /**
@@ -268,10 +289,19 @@ class VideoEngine {
     if (!this._childHwnd || !this._mainWindow) return;
     if (this._mainWindow.isDestroyed()) return;
 
+    if (!this._videoWanted) {
+      try {
+        User32.showWindow(this._childHwnd, false);
+      } catch (_) {}
+      return;
+    }
+
     const rect = this._videoRect;
     if (!rect || !rect.width || !rect.height) {
       // No video area — hide the child HWND so it doesn't show stale frames
-      try { User32.showWindow(this._childHwnd, false); } catch (_) {}
+      try {
+        User32.showWindow(this._childHwnd, false);
+      } catch (_) {}
       return;
     }
 
@@ -285,7 +315,14 @@ class VideoEngine {
     } catch (_) {}
 
     try {
-      User32.moveWindow(this._childHwnd, rect.x, rect.y, rect.width, rect.height, true);
+      User32.moveWindow(
+        this._childHwnd,
+        rect.x,
+        rect.y,
+        rect.width,
+        rect.height,
+        true,
+      );
       // Re-assert topmost after every move — critical for staying above
       // Chromium's GPU surface on resize/maximize/DPI changes.
       User32.bringToTop(this._childHwnd);
@@ -293,7 +330,7 @@ class VideoEngine {
       User32.showWindow(this._childHwnd, true);
       this._lastChildSyncAt = Date.now();
     } catch (err) {
-      console.warn('[engine] moveWindow failed:', err.message);
+      console.warn("[engine] moveWindow failed:", err.message);
     }
   }
 
@@ -302,16 +339,16 @@ class VideoEngine {
    * leaving the video screen.
    */
   setVideoVisible(visible) {
+    this._videoWanted = !!visible;
     if (!this._childHwnd) return;
     try {
-      User32.showWindow(this._childHwnd, !!visible);
-      if (visible) {
-        // Re-assert topmost when showing
-        User32.bringToTop(this._childHwnd);
-        this._updateChildWindowPosition();
+      if (!visible) {
+        User32.showWindow(this._childHwnd, false);
+        return;
       }
+      this._updateChildWindowPosition();
     } catch (err) {
-      console.warn('[engine] setVideoVisible failed:', err.message);
+      console.warn("[engine] setVideoVisible failed:", err.message);
     }
   }
 
@@ -319,10 +356,10 @@ class VideoEngine {
    * Load a video file into the engine. Does NOT auto-play.
    */
   load(filePath) {
-    if (!this._available) return { ok: false, error: 'libVLC unavailable' };
-    if (!require('fs').existsSync(filePath)) {
-      console.error('[engine] load: file not found:', filePath);
-      return { ok: false, error: 'File not found: ' + filePath };
+    if (!this._available) return { ok: false, error: "libVLC unavailable" };
+    if (!require("fs").existsSync(filePath)) {
+      console.error("[engine] load: file not found:", filePath);
+      return { ok: false, error: "File not found: " + filePath };
     }
 
     try {
@@ -331,27 +368,34 @@ class VideoEngine {
       this._releaseMedia();
 
       const v = vlc.load();
-      console.log('[engine] load: calling libvlc_media_new_path for:', filePath);
+      console.log(
+        "[engine] load: calling libvlc_media_new_path for:",
+        filePath,
+      );
       this._media = v.libvlc_media_new_path(this._vlcInstance, filePath);
-      if (!this._media) throw new Error('libvlc_media_new_path returned null');
-      console.log('[engine] load: media created OK');
+      if (!this._media) throw new Error("libvlc_media_new_path returned null");
+      console.log("[engine] load: media created OK");
 
       this._mediaPlayer = v.libvlc_media_player_new_from_media(this._media);
-      if (!this._mediaPlayer) throw new Error('libvlc_media_player_new_from_media returned null');
-      console.log('[engine] load: media player created OK');
+      if (!this._mediaPlayer)
+        throw new Error("libvlc_media_player_new_from_media returned null");
+      console.log("[engine] load: media player created OK");
 
       if (this._childHwnd) {
         v.libvlc_media_player_set_hwnd(this._mediaPlayer, this._childHwnd);
-        console.log('[engine] set_hwnd called with HWND 0x' + this._childHwnd.toString(16));
+        console.log(
+          "[engine] set_hwnd called with HWND 0x" +
+            this._childHwnd.toString(16),
+        );
         this._updateChildWindowPosition();
       } else {
-        console.warn('[engine] no child HWND — video will not display');
+        console.warn("[engine] no child HWND — video will not display");
       }
 
       this._startPollLoop();
       return { ok: true };
     } catch (err) {
-      console.error('[engine] load failed:', err.message);
+      console.error("[engine] load failed:", err.message);
       return { ok: false, error: err.message };
     }
   }
@@ -359,8 +403,15 @@ class VideoEngine {
   play() {
     if (!this._available || !this._mediaPlayer) return { ok: false };
     try {
-      vlc.load().libvlc_media_player_play(this._mediaPlayer);
-      return { ok: true };
+      const rc = vlc.load().libvlc_media_player_play(this._mediaPlayer);
+      console.log(
+        "[engine] play() -> rc=" +
+          rc +
+          ", rect=" +
+          JSON.stringify(this._videoRect),
+      );
+      this._updateChildWindowPosition();
+      return { ok: rc === 0 };
     } catch (err) {
       return { ok: false, error: err.message };
     }
@@ -379,7 +430,7 @@ class VideoEngine {
   toggle() {
     if (!this._available || !this._mediaPlayer) return { ok: false };
     const state = this.getState();
-    if (state === 'playing') return this.pause();
+    if (state === "playing") return this.pause();
     return this.play();
   }
 
@@ -397,7 +448,12 @@ class VideoEngine {
   seek(timeSec) {
     if (!this._available || !this._mediaPlayer) return { ok: false };
     try {
-      vlc.load().libvlc_media_player_set_time(this._mediaPlayer, Math.floor(timeSec * 1000));
+      vlc
+        .load()
+        .libvlc_media_player_set_time(
+          this._mediaPlayer,
+          Math.floor(timeSec * 1000),
+        );
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err.message };
@@ -407,7 +463,9 @@ class VideoEngine {
   setVolume(vol /* 0..1 */) {
     if (!this._available || !this._mediaPlayer) return { ok: false };
     try {
-      vlc.load().libvlc_audio_set_volume(this._mediaPlayer, Math.round(vol * 100));
+      vlc
+        .load()
+        .libvlc_audio_set_volume(this._mediaPlayer, Math.round(vol * 100));
       return { ok: true };
     } catch (err) {
       return { ok: false, error: err.message };
@@ -455,18 +513,41 @@ class VideoEngine {
   }
 
   getState() {
-    if (!this._available || !this._mediaPlayer) return 'idle';
+    if (!this._available || !this._mediaPlayer) return "idle";
     const s = vlc.load().libvlc_media_player_get_state(this._mediaPlayer);
-    return ['idle','idle','opening','buffering','playing','paused','stopped','ended','error'][s] || 'idle';
+    return (
+      [
+        "idle",
+        "idle",
+        "opening",
+        "buffering",
+        "playing",
+        "paused",
+        "stopped",
+        "ended",
+        "error",
+      ][s] || "idle"
+    );
   }
 
   getFullState() {
     if (!this._available || !this._mediaPlayer) {
-      return { available: false, time: 0, duration: 0, state: 'idle', position: 0, rate: 1, volume: 80, hasVout: 0 };
+      return {
+        available: false,
+        time: 0,
+        duration: 0,
+        state: "idle",
+        position: 0,
+        rate: 1,
+        volume: 80,
+        hasVout: 0,
+      };
     }
     const v = vlc.load();
     const timeMs = Number(v.libvlc_media_player_get_time(this._mediaPlayer));
-    const durationMs = Number(v.libvlc_media_player_get_length(this._mediaPlayer));
+    const durationMs = Number(
+      v.libvlc_media_player_get_length(this._mediaPlayer),
+    );
     const position = v.libvlc_media_player_get_position(this._mediaPlayer);
     const rate = v.libvlc_media_player_get_rate(this._mediaPlayer);
     const volume = v.libvlc_audio_get_volume(this._mediaPlayer);
@@ -479,25 +560,30 @@ class VideoEngine {
       position,
       rate,
       volume: volume < 0 ? 0 : volume,
-      hasVout
+      hasVout,
     };
   }
 
   getTracks() {
-    if (!this._available || !this._mediaPlayer) return { audio: [], subtitles: [], chapters: 0, currentChapter: 0 };
+    if (!this._available || !this._mediaPlayer)
+      return { audio: [], subtitles: [], chapters: 0, currentChapter: 0 };
     const v = vlc.load();
-    const audioDescPtr = v.libvlc_audio_get_track_description(this._mediaPlayer);
+    const audioDescPtr = v.libvlc_audio_get_track_description(
+      this._mediaPlayer,
+    );
     const spuDescPtr = v.libvlc_video_get_spu_description(this._mediaPlayer);
     const currentAudio = v.libvlc_audio_get_track(this._mediaPlayer);
     const currentSpu = v.libvlc_video_get_spu(this._mediaPlayer);
-    const chapterCount = v.libvlc_media_player_get_chapter_count(this._mediaPlayer);
+    const chapterCount = v.libvlc_media_player_get_chapter_count(
+      this._mediaPlayer,
+    );
     const currentChapter = v.libvlc_media_player_get_chapter(this._mediaPlayer);
 
     return {
       audio: User32.readTrackDescription(audioDescPtr, currentAudio),
       subtitles: User32.readTrackDescription(spuDescPtr, currentSpu),
       chapters: chapterCount,
-      currentChapter
+      currentChapter,
     };
   }
 
@@ -520,28 +606,37 @@ class VideoEngine {
     const state = this.getFullState();
     const stateName = state.state;
 
-    this._mainWindow.webContents.send('nova:engine-event', {
-      type: 'time',
+    const emitEvent = (payload) => {
+      this._mainWindow.webContents.send("nova:engine-event", payload);
+      try {
+        if (global.overlayWindow && !global.overlayWindow.isDestroyed()) {
+          global.overlayWindow.webContents.send("nova:engine-event", payload);
+        }
+      } catch (_) {}
+    };
+
+    emitEvent({
+      type: "time",
       time: state.time,
       duration: state.duration,
-      position: state.position
+      position: state.position,
     });
 
     if (stateName !== this._lastState) {
       this._lastState = stateName;
-      this._mainWindow.webContents.send('nova:engine-event', {
-        type: 'state',
+      emitEvent({
+        type: "state",
         state: stateName,
         time: state.time,
-        duration: state.duration
+        duration: state.duration,
       });
 
-      if (stateName === 'ended') {
-        this._mainWindow.webContents.send('nova:engine-event', { type: 'end' });
-      } else if (stateName === 'error') {
-        this._mainWindow.webContents.send('nova:engine-event', {
-          type: 'error',
-          message: 'libVLC reported an error during playback'
+      if (stateName === "ended") {
+        emitEvent({ type: "end" });
+      } else if (stateName === "error") {
+        emitEvent({
+          type: "error",
+          message: "libVLC reported an error during playback",
         });
       }
     }
@@ -549,14 +644,20 @@ class VideoEngine {
 
   _releaseMedia() {
     if (!this._media) return;
-    try { vlc.load().libvlc_media_release(this._media); } catch (_) {}
+    try {
+      vlc.load().libvlc_media_release(this._media);
+    } catch (_) {}
     this._media = null;
   }
 
   _releasePlayer() {
     if (!this._mediaPlayer) return;
-    try { vlc.load().libvlc_media_player_stop(this._mediaPlayer); } catch (_) {}
-    try { vlc.load().libvlc_media_player_release(this._mediaPlayer); } catch (_) {}
+    try {
+      vlc.load().libvlc_media_player_stop(this._mediaPlayer);
+    } catch (_) {}
+    try {
+      vlc.load().libvlc_media_player_release(this._mediaPlayer);
+    } catch (_) {}
     this._mediaPlayer = null;
   }
 
@@ -583,15 +684,19 @@ class VideoEngine {
       }
 
       if (this._vlcInstance) {
-        try { vlc.load().libvlc_release(this._vlcInstance); } catch (_) {}
+        try {
+          vlc.load().libvlc_release(this._vlcInstance);
+        } catch (_) {}
         this._vlcInstance = null;
       }
       if (this._childHwnd) {
-        try { User32.destroyWindow(this._childHwnd); } catch (_) {}
+        try {
+          User32.destroyWindow(this._childHwnd);
+        } catch (_) {}
         this._childHwnd = null;
       }
     } catch (err) {
-      console.warn('[engine] destroy error:', err.message);
+      console.warn("[engine] destroy error:", err.message);
     }
   }
 }

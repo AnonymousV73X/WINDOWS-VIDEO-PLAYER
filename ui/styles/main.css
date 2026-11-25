@@ -954,6 +954,8 @@ body.video-active:not(.controls-visible) .win-controls {
 
 .library-view {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   scrollbar-width: none;
   position: relative;
@@ -1205,22 +1207,28 @@ body.video-active:not(.controls-visible) .win-controls {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1) !important;
 }
 
-/* When video is active, hide the left sidebar, bottom now-playing bar, and titlebar left logo/name */
-body.video-active .titlebar,
-body.video-active .sidebar,
-body.video-active .sidebar-resizer,
-body.video-active .now-playing-bar {
+/* When video is active, hide the left sidebar, bottom now-playing bar, library view, and titlebar */
+.now-playing-bar {
   display: none !important;
 }
 
-body.video-active .app-body {
-  margin: 0;
-  padding: 0;
+body.video-active .titlebar,
+body.video-active .sidebar,
+body.video-active .sidebar-resizer,
+body.video-active .now-playing-bar,
+body.video-active .library-view {
+  display: none !important;
 }
 
+/* video-active: strip margins/radius and go pure black while waiting for VLC */
+body.video-active,
+body.video-active .app,
+body.video-active .app-body,
 body.video-active .content {
   margin: 0;
+  padding: 0;
   border-radius: 0;
+  background: #000 !important;
 }
 
 .video-screen {
@@ -2435,14 +2443,15 @@ body.video-active .win-btn {
    ═══════════════════════════════════════════════════════════════════ */
 
 .empty-state {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 24px;
+  padding: 40px 24px;
   text-align: center;
   gap: 16px;
-  height: 100%;
+  min-height: 280px;
 }
 
 .empty-state-icon {

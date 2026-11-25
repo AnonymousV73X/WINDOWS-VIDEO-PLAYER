@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       onNavigate: handleNavigate,
       onAddFolder: handleAddFolder,
       onRemoveFolder: handleRemoveFolder,
-      onFolderClick: (folder) => { /* could filter library by folder */ },
+      onFolderClick: handleFolderClick,
       onCreatePlaylist: handleCreatePlaylist,
       onPlaylistClick: (id) => { /* open playlist detail */ },
       onDeletePlaylist: handleDeletePlaylist,
@@ -284,6 +284,17 @@ function wireEngineEvents() {
       showToast(event.message || 'Playback error', 'error');
     }
   );
+
+  // Overlay BrowserWindow relayed controls
+  window.novaAPI.on('nova:overlay-back', () => handleBackToLibrary());
+  window.novaAPI.on('nova:overlay-toggle', () => playerControls._onPlayPause());
+  window.novaAPI.on('nova:overlay-prev', () => handlePrev());
+  window.novaAPI.on('nova:overlay-next', () => handleNext());
+  window.novaAPI.on('nova:overlay-shuffle', () => playerControls.shuffleBtn.click());
+  window.novaAPI.on('nova:overlay-repeat', () => playerControls.repeatBtn.click());
+  window.novaAPI.on('nova:overlay-fullscreen', () => videoScreen.toggleFullscreen());
+  window.novaAPI.on('nova:overlay-mute', () => playerControls.volumeBtn.click());
+  window.novaAPI.on('nova:overlay-action', (type) => trackMenu.show(type));
 }
 
 // ═══ Playback flow ═══════════════════════════════════════════════
@@ -417,6 +428,28 @@ async function loadHistory() {
 async function loadPlaylistsView() {
   // For now, just show empty state — playlist detail view can be added later
   libraryView.setVideos([]);
+}
+
+function handleFolderClick(folder) {
+  // Make sure we are on library view
+  document.getElementById('library-view').classList.remove('hidden');
+  document.getElementById('settings-view').classList.add('hidden');
+  document.getElementById('video-screen').classList.remove('active');
+
+  const folderName = folder.split(/[\\/]/).filter(Boolean).pop() || folder;
+  libraryView.setView('library', {
+    title: folderName,
+    subtitle: folder
+  });
+
+  const normTarget = folder.replace(/[\\/]+$/, '').toLowerCase();
+  const filtered = state.videos.filter(v => {
+    if (!v.filePath) return false;
+    const parent = v.filePath.substring(0, v.filePath.lastIndexOf(/[\\/]/.test(v.filePath) ? v.filePath.match(/[\\/][^\\/]*$/).index : 0)).toLowerCase();
+    return parent === normTarget || v.filePath.toLowerCase().startsWith(normTarget + '\\') || v.filePath.toLowerCase().startsWith(normTarget + '/');
+  });
+
+  libraryView.setVideos(filtered);
 }
 
 // ═══ Folders ═════════════════════════════════════════════════════

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:;">
+  <title>NovaPlay Overlay</title>
+  <link rel="stylesheet" href="styles/outfit.css">
+  <link rel="stylesheet" href="styles/main.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      background: transparent !important;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #overlay-root {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+    #overlay-root > * { pointer-events: auto; }
+    /* Show/hide via opacity (controlled by JS) */
+    #overlay-root.hidden { opacity: 0; pointer-events: none; }
+    /* Win controls live here in video mode */
+    .ov-win-controls {
+      position: fixed;
+      top: 0; right: 0;
+      height: 48px;
+      display: flex;
+      z-index: 100001;
+      -webkit-app-region: no-drag;
+      pointer-events: auto;
+    }
+    .ov-win-btn {
+      width: 46px; height: 48px;
+      display: flex; align-items: center; justify-content: center;
+      background: transparent;
+      border: none; color: #fff; cursor: pointer;
+      transition: background 0.12s;
+      -webkit-app-region: no-drag;
+    }
+    .ov-win-btn svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .ov-win-btn:hover { background: rgba(255,255,255,0.16); }
+    .ov-win-btn.ov-close:hover { background: #e81123; }
+    .ov-spacer { flex: 1; pointer-events: none; -webkit-app-region: drag; }
+  </style>
+</head>
+<body>
+  <div id="overlay-root" class="hidden">
+
+    <!-- Top bar: back + title + actions (drag region) -->
+    <div class="player-controls-top">
+      <button class="player-back-btn" id="ov-back-btn" title="Back to library">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+      <div class="player-video-title" id="ov-video-title">—</div>
+      <div class="player-top-actions">
+        <button class="player-action-btn" id="ov-audio-tracks" title="Audio tracks">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 18v-6a9 9 0 0 1 18 0v6"/>
+            <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/>
+            <path d="M3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3"/>
+          </svg>
+        </button>
+        <button class="player-action-btn" id="ov-subtitle-tracks" title="Subtitles">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="5" width="18" height="14" rx="2"/>
+            <path d="M7 15h2M13 15h4M7 11h2M13 11h4"/>
+          </svg>
+        </button>
+        <button class="player-action-btn" id="ov-chapters" title="Chapters">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+            <line x1="8" y1="18" x2="21" y2="18"/>
+            <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/>
+            <line x1="3" y1="18" x2="3.01" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Win controls (shown over video) -->
+    <div class="ov-win-controls">
+      <button class="ov-win-btn" id="ov-minimize" aria-label="Minimize"><svg viewBox="0 0 12 12"><line x1="1.5" y1="6" x2="10.5" y2="6"/></svg></button>
+      <button class="ov-win-btn" id="ov-maximize" aria-label="Maximize"><svg viewBox="0 0 12 12"><rect x="1.75" y="1.75" width="8.5" height="8.5" rx="1.2"/></svg></button>
+      <button class="ov-win-btn ov-close" id="ov-close" aria-label="Close"><svg viewBox="0 0 12 12"><line x1="1.75" y1="1.75" x2="10.25" y2="10.25"/><line x1="10.25" y1="1.75" x2="1.75" y2="10.25"/></svg></button>
+    </div>
+
+    <!-- Spacer (drag region) -->
+    <div class="ov-spacer"></div>
+
+    <!-- Bottom bar: progress + controls -->
+    <div class="player-controls-bottom">
+      <div class="progress-bar-wrap" id="ov-progress-wrap">
+        <div class="progress-bubble" id="ov-progress-bubble">0:00</div>
+        <div class="progress-bar" id="ov-progress-bar">
+          <div class="progress-buffer-fill" id="ov-progress-buffer" style="width:0%"></div>
+          <div class="progress-fill" id="ov-progress-fill" style="width:0%"></div>
+          <div class="progress-handle" id="ov-progress-handle" style="left:0%"></div>
+        </div>
+      </div>
+      <div class="player-time-row">
+        <span id="ov-time-current">0:00</span>
+        <span id="ov-time-total">0:00</span>
+      </div>
+      <div class="player-controls-row">
+        <div class="player-controls-group">
+          <button class="volume-btn" id="ov-volume-btn" title="Mute">
+            <svg id="ov-volume-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            </svg>
+          </button>
+          <div class="volume-bar-wrap" id="ov-volume-wrap">
+            <div class="volume-fill" id="ov-volume-fill" style="width:80%"></div>
+            <div class="volume-handle" id="ov-volume-handle" style="left:80%"></div>
+          </div>
+        </div>
+        <div class="player-controls-group center">
+          <button class="transport-btn" id="ov-prev-btn" title="Previous">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+              <path d="M19 20L9 12l10-8v16z"/><rect x="5" y="4" width="3" height="16" rx="1.5"/>
+            </svg>
+          </button>
+          <button class="play-btn" id="ov-play-pause-btn" title="Play/Pause">
+            <svg id="ov-play-pause-icon" viewBox="0 0 24 24">
+              <path d="M6 4l12 8-12 8V4z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="transport-btn" id="ov-next-btn" title="Next">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+              <path d="M5 4l10 8-10 8V4z"/><rect x="16" y="4" width="3" height="16" rx="1.5"/>
+            </svg>
+          </button>
+        </div>
+        <div class="player-controls-group">
+          <button class="speed-pill" id="ov-speed-pill" title="Speed">1x</button>
+          <button class="transport-btn" id="ov-shuffle-btn" title="Shuffle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
+              <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
+              <line x1="4" y1="4" x2="9" y2="9"/>
+            </svg>
+          </button>
+          <button class="transport-btn" id="ov-repeat-btn" title="Repeat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="17 1 21 5 17 9"/>
+              <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+              <polyline points="7 23 3 19 7 15"/>
+              <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+            </svg>
+          </button>
+          <button class="transport-btn" id="ov-fullscreen-btn" title="Fullscreen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+              <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="overlay.js"></script>
+</body>
+</html>
