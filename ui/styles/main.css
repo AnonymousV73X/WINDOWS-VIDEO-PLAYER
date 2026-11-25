@@ -1277,7 +1277,6 @@ body.video-active .video-screen {
   background: #000;
   display: none;
   z-index: 2;
-  video-rendering: crisp-edges;
 }
 
 .video-fallback-element.active {
