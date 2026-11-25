@@ -518,7 +518,6 @@ class VideoEngine {
     return (
       [
         "idle",
-        "idle",
         "opening",
         "buffering",
         "playing",
@@ -617,6 +616,7 @@ class VideoEngine {
 
     emitEvent({
       type: "time",
+      state: stateName,
       time: state.time,
       duration: state.duration,
       position: state.position,
