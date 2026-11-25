@@ -77,19 +77,25 @@ class VideoScreen {
       "position:fixed;inset:0;z-index:99999;background:#000;display:flex;";
     this.titleEl.textContent = video.title || "Untitled";
 
-    // Tell the engine to show the child HWND
-    window.novaAPI.send("nova:engine-set-video-visible", true);
-    window.novaAPI.send("nova:overlay-show", {
-      title: video.title || "Untitled",
-      accentColor:
-        getComputedStyle(document.documentElement)
-          .getPropertyValue("--green")
-          .trim() || "#FF8800",
-    });
-
-    // Report rect after layout settles
+    // Black is already painted synchronously above. Only AFTER it has been
+    // composited (2 frames) do we reveal the VLC HWND and the controls window,
+    // so the controls never appear over the library.
+    const accent =
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--green")
+        .trim() || "#FF8800";
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => this.reportRect());
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          if (!this._visible) return;
+          window.novaAPI.send("nova:engine-set-video-visible", true);
+          this.reportRect();
+          window.novaAPI.send("nova:overlay-show", {
+            title: video.title || "Untitled",
+            accentColor: accent,
+          });
+        }, 60);
+      });
     });
 
     // Show controls initially
