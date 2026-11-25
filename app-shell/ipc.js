@@ -403,6 +403,7 @@ function registerIPCHandlers(mainWindow) {
     ) {
       try {
         _mainWindow.setBackgroundColor("#000000");
+        _overlayWindow.setIgnoreMouseEvents(false);
         _overlayWindow.setBounds(_mainWindow.getContentBounds());
         _overlayWindow.showInactive();
         _overlayWindow.moveTop();
@@ -422,9 +423,13 @@ function registerIPCHandlers(mainWindow) {
     sendToOverlay("nova:overlay-hide");
     if (_overlayWindow && !_overlayWindow.isDestroyed()) {
       try {
+        _overlayWindow.setIgnoreMouseEvents(true);
         _overlayWindow.hide();
       } catch (_) {}
     }
+    try {
+      if (_mainWindow && !_mainWindow.isDestroyed()) _mainWindow.focus();
+    } catch (_) {}
   });
 
   // ─── Video Engine ───────────────────────────────────────────────
